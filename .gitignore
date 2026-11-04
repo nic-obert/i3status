@@ -1,10 +1,6 @@
 *.o
 .*.swp
-i3status
 man/i3status.1
-
-# We recommend building in a subdirectory called build.
-# If you chose a different directory name,
-# it is up to you to arrange for it to be ignored by git,
-# e.g. by listing your directory in .git/info/exclude.
 /build
+i3status/build
+/pkg
