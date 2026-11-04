@@ -35,7 +35,6 @@ void print_cpu_usage(cpu_usage_ctx_t *ctx) {
     struct cpu_usage curr_all = {0, 0, 0, 0, 0};
     int diff_idle, diff_total;
     int diff_usage;
-    bool colorful_output = false;
 
     // Detecting if CPU count has changed
     int curr_cpu_count = get_nprocs_conf();
@@ -98,12 +97,10 @@ void print_cpu_usage(cpu_usage_ctx_t *ctx) {
 
     if (diff_usage >= ctx->max_threshold) {
         START_COLOR("color_bad");
-        colorful_output = true;
         if (ctx->format_above_threshold != NULL)
             selected_format = ctx->format_above_threshold;
     } else if (diff_usage >= ctx->degraded_threshold) {
         START_COLOR("color_degraded");
-        colorful_output = true;
         if (ctx->format_above_degraded_threshold != NULL)
             selected_format = ctx->format_above_degraded_threshold;
     }
@@ -140,9 +137,6 @@ void print_cpu_usage(cpu_usage_ctx_t *ctx) {
     struct cpu_usage *temp_cpus = prev_cpus;
     prev_cpus = curr_cpus;
     curr_cpus = temp_cpus;
-
-    if (colorful_output)
-        END_COLOR;
 
     OUTPUT_FULL_TEXT(ctx->buf);
     return;

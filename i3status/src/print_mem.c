@@ -197,9 +197,6 @@ void print_memory(memory_ctx_t *ctx) {
     OUTPUT_FORMATTED;
     free(formatted);
 
-    if (output_color)
-        END_COLOR;
-
     OUTPUT_FULL_TEXT(ctx->buf);
 
     return;

@@ -119,8 +119,6 @@ out : {
     char *formatted = format_placeholders(format, &placeholders[0], num);
     OUTPUT_FORMATTED;
     free(formatted);
-
-    END_COLOR;
     free(ipv4_address);
     free(ipv6_address);
     OUTPUT_FULL_TEXT(ctx->buf);

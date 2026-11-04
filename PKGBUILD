@@ -6,7 +6,7 @@
 # Contributor: Ingo Bürk <ingo.buerk@airblader.de>
 
 pkgname=i3status
-pkgver=3.0
+pkgver=3.1
 pkgrel=1
 pkgdesc='Generates status bar to use with i3bar'
 arch=('x86_64')

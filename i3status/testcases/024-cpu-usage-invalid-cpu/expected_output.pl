@@ -4,4 +4,4 @@ use v5.10;
 use strict;
 use warnings;
 
-print "CPU: \n";
+print "{\"version\":1}\n[\n[{\"name\":\"cpu_usage\",\"full_text\":\"CPU: \"}]\n";

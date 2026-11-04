@@ -44,7 +44,6 @@ void print_cpu_temperature_info(cpu_temperature_ctx_t *ctx) {
     char *outwalk = ctx->buf;
 #ifdef THERMAL_ZONE
     const char *selected_format = ctx->format;
-    bool colorful_output = false;
     char *thermal_zone;
     temperature_t temperature;
     temperature.raw_value = 0;
@@ -73,7 +72,6 @@ void print_cpu_temperature_info(cpu_temperature_ctx_t *ctx) {
 
     if (temperature.raw_value >= ctx->max_threshold) {
         START_COLOR("color_bad");
-        colorful_output = true;
         if (ctx->format_above_threshold != NULL)
             selected_format = ctx->format_above_threshold;
     }
@@ -87,12 +85,6 @@ void print_cpu_temperature_info(cpu_temperature_ctx_t *ctx) {
     char *formatted = format_placeholders(selected_format, &placeholders[0], num);
     OUTPUT_FORMATTED;
     free(formatted);
-
-    if (colorful_output) {
-        END_COLOR;
-        colorful_output = false;
-    }
-
     free(thermal_zone);
 
     OUTPUT_FULL_TEXT(ctx->buf);

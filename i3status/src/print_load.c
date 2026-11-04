@@ -17,14 +17,12 @@ void print_load(load_ctx_t *ctx) {
 
     double loadavg[3];
     const char *selected_format = ctx->format;
-    bool colorful_output = false;
 
     if (getloadavg(loadavg, 3) == -1)
         goto error;
 
     if (loadavg[0] >= ctx->max_threshold) {
         START_COLOR("color_bad");
-        colorful_output = true;
         if (ctx->format_above_threshold != NULL)
             selected_format = ctx->format_above_threshold;
     }
@@ -46,9 +44,6 @@ void print_load(load_ctx_t *ctx) {
     char *formatted = format_placeholders(selected_format, &placeholders[0], num);
     OUTPUT_FORMATTED;
     free(formatted);
-
-    if (colorful_output)
-        END_COLOR;
 
     *outwalk = '\0';
     OUTPUT_FULL_TEXT(ctx->buf);

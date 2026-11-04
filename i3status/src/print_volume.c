@@ -1,4 +1,3 @@
-#include <config.h>
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
@@ -12,7 +11,6 @@
 #include <math.h>
 
 #include "i3status.h"
-#include "queue.h"
 
 #define STRING_SIZE 10
 
@@ -52,12 +50,10 @@ void print_volume(volume_ctx_t *ctx) {
     int pbval = 1;
 
     /* Printing volume works with ALSA and PulseAudio at the moment */
-    if (output_format == O_I3BAR) {
-        char *instance;
-        asprintf(&instance, "%s.%s.%d", ctx->device, ctx->mixer, ctx->mixer_idx);
-        INSTANCE(instance);
-        free(instance);
-    }
+    char *instance;
+    asprintf(&instance, "%s.%s.%d", ctx->device, ctx->mixer, ctx->mixer_idx);
+    INSTANCE(instance);
+    free(instance);
 
     /* Try PulseAudio first */
 
@@ -96,7 +92,7 @@ void print_volume(volume_ctx_t *ctx) {
                                               description);
         OUTPUT_FORMATTED;
         free(formatted);
-        goto out_with_format;
+        goto out;
     } else if (!strcasecmp(ctx->device, "default") && pulse_initialize()) {
         /* no device specified or "default" set */
         char description[MAX_SINK_DESCRIPTION_LEN];
@@ -114,7 +110,7 @@ void print_volume(volume_ctx_t *ctx) {
                                                   description);
             OUTPUT_FORMATTED;
             free(formatted);
-            goto out_with_format;
+            goto out;
         }
         /* negative result or NULL description means error, fail PulseAudio attempt */
     }
@@ -220,16 +216,8 @@ void print_volume(volume_ctx_t *ctx) {
 
     snd_mixer_close(m);
     snd_mixer_selem_id_free(sid);
-    goto out_with_format;
+    goto out;
 
 out:
-    if (!pbval)
-        END_COLOR;
-    OUTPUT_FULL_TEXT(ctx->buf);
-    return;
-
-out_with_format:
-    if (!pbval)
-        END_COLOR;
     OUTPUT_FULL_TEXT(ctx->buf);
 }

@@ -15,7 +15,6 @@
 #include <limits.h>
 #include <string.h>
 #include <stdio.h>
-#include <stdbool.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -38,8 +37,7 @@
     CFG_STR_CB("align", NULL, CFGF_NONE, parse_align)
 
 #define CFG_COLOR_OPTS(good, degraded, bad)             \
-    CFG_STR("color_good", good, CFGF_NONE)              \
-    ,                                                   \
+    CFG_STR("color_good", good, CFGF_NONE),             \
         CFG_STR("color_degraded", degraded, CFGF_NONE), \
         CFG_STR("color_bad", bad, CFGF_NONE)
 
@@ -65,9 +63,6 @@ cfg_t *cfg, *cfg_general, *cfg_section;
 void **cur_instance;
 
 pthread_t main_thread;
-
-markup_format_t markup_format;
-output_format_t output_format;
 
 /*
  * Set the exit_upon_signal flag, because one cannot do anything in a safe
@@ -224,28 +219,15 @@ static char *get_config_path(void) {
         "~/.i3status.conf, $XDG_CONFIG_HOME/i3status/config, " SYSCONFDIR "/i3status.conf and $XDG_CONFIG_DIRS/i3status/config)");
 }
 
-/*
- * Returns the default separator to use if no custom separator has been specified.
- TODO: maybe inline and remove or replace with a global constant
- */
-static char *get_default_separator() {
-    if (output_format == O_I3BAR)
-        // anything besides the empty string indicates that the default separator should be used
-        return "default";
-    return " | ";
-}
-
 int main(int argc, char *argv[]) {
     unsigned int j;
 
     cfg_opt_t general_opts[] = {
-        CFG_STR("output_format", "auto", CFGF_NONE),
         CFG_BOOL("colors", 1, CFGF_NONE),
-        CFG_STR("separator", "default", CFGF_NONE), // TODO: Why is "default" a string?
+        CFG_STR("separator", "default", CFGF_NONE),
         CFG_STR("color_separator", "#333333", CFGF_NONE),
         CFG_INT("interval", 1, CFGF_NONE),
         CFG_COLOR_OPTS("#00FF00", "#FFFF00", "#FF0000"),
-        CFG_STR("markup", "none", CFGF_NONE),
         CFG_END()};
 
     cfg_opt_t wireless_opts[] = {
@@ -471,52 +453,17 @@ int main(int argc, char *argv[]) {
     if (cfg_general == NULL)
         die("Could not get section \"general\"\n");
 
-    char *output_str = cfg_getstr(cfg_general, "output_format");
-    if (strcasecmp(output_str, "auto") == 0) {
-        fprintf(stderr, "i3status: trying to auto-detect output_format setting\n");
-        output_str = "i3bar";
-        if (!output_str) {
-            output_str = "none";
-            fprintf(stderr, "i3status: falling back to \"none\"\n");
-        } else {
-            fprintf(stderr, "i3status: auto-detected \"%s\"\n", output_str);
-        }
-    }
-
-    if (strcasecmp(output_str, "i3bar") == 0)
-        output_format = O_I3BAR;
-    else if (strcasecmp(output_str, "none") == 0)
-        output_format = O_NONE;
-    else
-        die("Unknown output format: \"%s\"\n", output_str);
-
-    const char *separator = cfg_getstr(cfg_general, "separator");
-
-    // if no custom separator has been provided, use the default one
-    if (strcasecmp(separator, "default") == 0)
-        separator = get_default_separator();
-
     if (!valid_color(cfg_getstr(cfg_general, "color_good")) || !valid_color(cfg_getstr(cfg_general, "color_degraded")) || !valid_color(cfg_getstr(cfg_general, "color_bad")) || !valid_color(cfg_getstr(cfg_general, "color_separator")))
         die("Bad color format\n");
 
-    char *markup_str = cfg_getstr(cfg_general, "markup");
-    if (strcasecmp(markup_str, "pango") == 0)
-        markup_format = M_PANGO;
-    else if (strcasecmp(markup_str, "none") == 0)
-        markup_format = M_NONE;
-    else
-        die("Unknown markup format: \"%s\"\n", markup_str);
-
     yajl_gen json_gen = yajl_gen_alloc(NULL);
 
-    if (output_format == O_I3BAR) {
-        /* Initialize the i3bar protocol. See i3/docs/i3bar-protocol
-         * for details. */
-        printf("{\"version\":1}\n[\n");
-        fflush(stdout);
-        yajl_gen_array_open(json_gen);
-        yajl_gen_clear(json_gen);
-    }
+    /* Initialize the i3bar protocol. See i3/docs/i3bar-protocol
+        * for details. */
+    printf("{\"version\":1}\n[\n");
+    fflush(stdout);
+    yajl_gen_array_open(json_gen);
+    yajl_gen_clear(json_gen);
 
     if ((general_socket = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
         die("Could not create socket\n");
@@ -564,12 +511,9 @@ int main(int argc, char *argv[]) {
         }
         struct timeval tv;
         gettimeofday(&tv, NULL);
-        if (output_format == O_I3BAR)
-            yajl_gen_array_open(json_gen);
+        yajl_gen_array_open(json_gen);
         for (j = 0; j < cfg_size(cfg, "order"); j++) {
             cur_instance = per_instance + j;
-            if (j > 0)
-                print_separator(separator);
 
             const char *current = cfg_getnstr(cfg, "order", j);
 
@@ -770,14 +714,12 @@ int main(int argc, char *argv[]) {
                 SEC_CLOSE_MAP;
             }
         }
-        if (output_format == O_I3BAR) {
-            yajl_gen_array_close(json_gen);
-            const unsigned char *buf;
-            size_t len;
-            yajl_gen_get_buf(json_gen, &buf, &len);
-            write(STDOUT_FILENO, buf, len);
-            yajl_gen_clear(json_gen);
-        }
+        yajl_gen_array_close(json_gen);
+        const unsigned char *buf;
+        size_t len;
+        yajl_gen_get_buf(json_gen, &buf, &len);
+        write(STDOUT_FILENO, buf, len);
+        yajl_gen_clear(json_gen);
 
         printf("\n");
         fflush(stdout);

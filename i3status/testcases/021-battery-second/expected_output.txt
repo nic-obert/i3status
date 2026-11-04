@@ -1,1 +1,3 @@
-BAT 30.64% 02:09:32
+{"version":1}
+[
+[{"name":"battery","instance":"testcases/021-battery-second/BAT0_uevent","full_text":"BAT 30.64% 02:09:32"}]

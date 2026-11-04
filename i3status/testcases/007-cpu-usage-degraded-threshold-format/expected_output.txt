@@ -1,1 +1,3 @@
-ABOVE_THRESHOLD
+{"version":1}
+[
+[{"name":"cpu_usage","color":"#FF0000","full_text":"ABOVE_THRESHOLD"}]

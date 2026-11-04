@@ -1,1 +1,3 @@
-IDLE
+{"version":1}
+[
+[{"name":"battery","instance":"testcases/023-battery-not-charging/BAT0_uevent","full_text":"IDLE"}]

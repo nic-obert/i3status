@@ -1,19 +1,6 @@
 #ifndef _I3STATUS_H
 #define _I3STATUS_H
 
-// TODO: since we only use i3bar, this enum may be unnecessary
-typedef enum {
-    O_I3BAR,
-    O_NONE
-} output_format_t;
-extern output_format_t output_format;
-
-typedef enum {
-    M_PANGO,
-    M_NONE
-} markup_format_t;
-extern markup_format_t markup_format;
-
 #include <stdbool.h>
 #include <confuse.h>
 #include <time.h>
@@ -23,6 +10,7 @@ extern markup_format_t markup_format;
 #include <string.h>
 #include <pthread.h>
 #include <stdint.h>
+
 
 #define BEGINS_WITH(haystack, needle) (strncmp(haystack, needle, strlen(needle)) == 0)
 #define max(a, b) ((a) > (b) ? (a) : (b))
@@ -56,60 +44,49 @@ extern markup_format_t markup_format;
         /* Terminate the output buffer here in any case, so that it’s                              \
          * not forgotten in the module */                                                            \
         *outwalk = '\0';                                                                             \
-        if (output_format == O_I3BAR) {                                                              \
-            char *_markup = cfg_getstr(cfg_general, "markup");                                       \
-            yajl_gen_string(ctx->json_gen, (const unsigned char *)"markup", strlen("markup"));       \
-            yajl_gen_string(ctx->json_gen, (const unsigned char *)_markup, strlen(_markup));         \
-            yajl_gen_string(ctx->json_gen, (const unsigned char *)"full_text", strlen("full_text")); \
-            yajl_gen_string(ctx->json_gen, (const unsigned char *)text, strlen(text));               \
-        } else {                                                                                     \
-            printf("%s", text);                                                                      \
-        }                                                                                            \
+        yajl_gen_string(ctx->json_gen, (const unsigned char *)"full_text", strlen("full_text")); \
+        yajl_gen_string(ctx->json_gen, (const unsigned char *)text, strlen(text));               \
     } while (0)
 
 #define SEC_OPEN_MAP(name)                                                            \
     do {                                                                              \
-        if (output_format == O_I3BAR) {                                               \
-            yajl_gen_map_open(json_gen);                                              \
-            yajl_gen_string(json_gen, (const unsigned char *)"name", strlen("name")); \
-            yajl_gen_string(json_gen, (const unsigned char *)name, strlen(name));     \
-        }                                                                             \
+        yajl_gen_map_open(json_gen);                                              \
+        yajl_gen_string(json_gen, (const unsigned char *)"name", strlen("name")); \
+        yajl_gen_string(json_gen, (const unsigned char *)name, strlen(name));     \
     } while (0)
 
 #define SEC_CLOSE_MAP                                                                                                       \
     do {                                                                                                                    \
-        if (output_format == O_I3BAR) {                                                                                     \
-            char *_align = cfg_getstr(sec, "align");                                                                        \
-            if (_align) {                                                                                                   \
-                yajl_gen_string(json_gen, (const unsigned char *)"align", strlen("align"));                                 \
-                yajl_gen_string(json_gen, (const unsigned char *)_align, strlen(_align));                                   \
-            }                                                                                                               \
-            struct min_width *_width = cfg_getptr(sec, "min_width");                                                        \
-            if (_width) {                                                                                                   \
-                /* if the value can be parsed as a number, we use the numerical value */                                    \
-                if (_width->num > 0) {                                                                                      \
-                    yajl_gen_string(json_gen, (const unsigned char *)"min_width", strlen("min_width"));                     \
-                    yajl_gen_integer(json_gen, _width->num);                                                                \
-                } else {                                                                                                    \
-                    yajl_gen_string(json_gen, (const unsigned char *)"min_width", strlen("min_width"));                     \
-                    yajl_gen_string(json_gen, (const unsigned char *)_width->str, strlen(_width->str));                     \
-                }                                                                                                           \
-            }                                                                                                               \
-            if (cfg_size(sec, "separator") > 0) {                                                                           \
-                yajl_gen_string(json_gen, (const unsigned char *)"separator", strlen("separator"));                         \
-                yajl_gen_bool(json_gen, cfg_getbool(sec, "separator"));                                                     \
-            }                                                                                                               \
-            if (cfg_size(sec, "separator_block_width") > 0) {                                                               \
-                yajl_gen_string(json_gen, (const unsigned char *)"separator_block_width", strlen("separator_block_width")); \
-                yajl_gen_integer(json_gen, cfg_getint(sec, "separator_block_width"));                                       \
-            }                                                                                                               \
-            const char *_sep = cfg_getstr(cfg_general, "separator");                                                        \
-            if (strlen(_sep) == 0) {                                                                                        \
-                yajl_gen_string(json_gen, (const unsigned char *)"separator", strlen("separator"));                         \
-                yajl_gen_bool(json_gen, false);                                                                             \
-            }                                                                                                               \
-            yajl_gen_map_close(json_gen);                                                                                   \
-        }                                                                                                                   \
+        char *_align = cfg_getstr(sec, "align");                                                                        \
+        if (_align) {                                                                                                   \
+            yajl_gen_string(json_gen, (const unsigned char *)"align", strlen("align"));                                 \
+            yajl_gen_string(json_gen, (const unsigned char *)_align, strlen(_align));                                   \
+        }                                                                                                               \
+        struct min_width *_width = cfg_getptr(sec, "min_width");                                                        \
+        if (_width) {                                                                                                   \
+            /* if the value can be parsed as a number, we use the numerical value */                                    \
+            if (_width->num > 0) {                                                                                      \
+                yajl_gen_string(json_gen, (const unsigned char *)"min_width", strlen("min_width"));                     \
+                yajl_gen_integer(json_gen, _width->num);                                                                \
+            } else {                                                                                                    \
+                yajl_gen_string(json_gen, (const unsigned char *)"min_width", strlen("min_width"));                     \
+                yajl_gen_string(json_gen, (const unsigned char *)_width->str, strlen(_width->str));                     \
+            }                                                                                                           \
+        }                                                                                                               \
+        if (cfg_size(sec, "separator") > 0) {                                                                           \
+            yajl_gen_string(json_gen, (const unsigned char *)"separator", strlen("separator"));                         \
+            yajl_gen_bool(json_gen, cfg_getbool(sec, "separator"));                                                     \
+        }                                                                                                               \
+        if (cfg_size(sec, "separator_block_width") > 0) {                                                               \
+            yajl_gen_string(json_gen, (const unsigned char *)"separator_block_width", strlen("separator_block_width")); \
+            yajl_gen_integer(json_gen, cfg_getint(sec, "separator_block_width"));                                       \
+        }                                                                                                               \
+        const char *_sep = cfg_getstr(cfg_general, "separator");                                                        \
+        if (strlen(_sep) == 0) {                                                                                        \
+            yajl_gen_string(json_gen, (const unsigned char *)"separator", strlen("separator"));                         \
+            yajl_gen_bool(json_gen, false);                                                                             \
+        }                                                                                                               \
+        yajl_gen_map_close(json_gen);                                                                                   \
     } while (0)
 
 #define START_COLOR(colorstr)                                                                    \
@@ -120,28 +97,15 @@ extern markup_format_t markup_format;
                 _val = cfg_getstr(cfg_section, colorstr);                                        \
             if (!_val)                                                                           \
                 _val = cfg_getstr(cfg_general, colorstr);                                        \
-            if (output_format == O_I3BAR) {                                                      \
-                yajl_gen_string(ctx->json_gen, (const unsigned char *)"color", strlen("color")); \
-                yajl_gen_string(ctx->json_gen, (const unsigned char *)_val, strlen(_val));       \
-            } else {                                                                             \
-                outwalk += sprintf(outwalk, "%s", color(colorstr));                              \
-            }                                                                                    \
+            yajl_gen_string(ctx->json_gen, (const unsigned char *)"color", strlen("color")); \
+            yajl_gen_string(ctx->json_gen, (const unsigned char *)_val, strlen(_val));       \
         }                                                                                        \
-    } while (0)
-
-#define END_COLOR                                                             \
-    do {                                                                      \
-        if (cfg_getbool(cfg_general, "colors") && output_format != O_I3BAR) { \
-            *outwalk = '\0';                   \
-        }                                                                     \
     } while (0)
 
 #define INSTANCE(instance)                                                                         \
     do {                                                                                           \
-        if (output_format == O_I3BAR) {                                                            \
-            yajl_gen_string(ctx->json_gen, (const unsigned char *)"instance", strlen("instance")); \
-            yajl_gen_string(ctx->json_gen, (const unsigned char *)instance, strlen(instance));     \
-        }                                                                                          \
+        yajl_gen_string(ctx->json_gen, (const unsigned char *)"instance", strlen("instance")); \
+        yajl_gen_string(ctx->json_gen, (const unsigned char *)instance, strlen(instance));     \
     } while (0)
 
 #define OUTPUT_FORMATTED                                             \
@@ -169,10 +133,8 @@ void *scalloc(size_t size);
 char *sstrdup(const char *str);
 
 /* src/output.c */
-void print_separator(const char *separator);
 char *color(const char *colorstr);
 void reset_cursor(void);
-void maybe_escape_markup(char *text, char *buffer, size_t size);
 
 char *rtrim(const char *s);
 char *ltrim(const char *s);
@@ -208,19 +170,6 @@ typedef struct {
 } ipv6_info_ctx_t;
 
 void print_ipv6_info(ipv6_info_ctx_t *ctx);
-
-typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
-    const char *path;
-    const char *format;
-    const char *format_below_threshold;
-    const char *format_not_mounted;
-    const char *prefix_type;
-    const char *threshold_type;
-    const double low_threshold;
-} disk_info_ctx_t;
 
 typedef struct {
     yajl_gen json_gen;

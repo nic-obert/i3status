@@ -1,1 +1,3 @@
-Touchpad: 30.64% BAT 02:09
+{"version":1}
+[
+[{"name":"battery","instance":"testcases/015-battery-capacity/uevent","full_text":"Touchpad: 30.64% BAT 02:09"}]

@@ -251,7 +251,6 @@ void print_battery_info(battery_info_ctx_t *ctx) {
         .percentage_remaining = -1,
         .status = CS_UNKNOWN,
     };
-    bool colorful_output = false;
 
     if (ctx->number < 0) {
         if (!slurp_all_batteries(ctx, &batt_info, ctx->json_gen, ctx->buf, ctx->path, ctx->format_down))
@@ -304,10 +303,8 @@ void print_battery_info(battery_info_ctx_t *ctx) {
     if (batt_info.status == CS_DISCHARGING && ctx->low_threshold > 0) {
         if (batt_info.percentage_remaining >= 0 && strcasecmp(ctx->threshold_type, "percentage") == 0 && batt_info.percentage_remaining < ctx->low_threshold) {
             START_COLOR("color_bad");
-            colorful_output = true;
         } else if (batt_info.seconds_remaining >= 0 && strcasecmp(ctx->threshold_type, "time") == 0 && batt_info.seconds_remaining < 60 * ctx->low_threshold) {
             START_COLOR("color_bad");
-            colorful_output = true;
         }
     }
 
@@ -376,10 +373,6 @@ void print_battery_info(battery_info_ctx_t *ctx) {
     OUTPUT_FORMATTED;
     free(formatted);
     free(untrimmed);
-
-    if (colorful_output) {
-        END_COLOR;
-    }
 
     OUTPUT_FULL_TEXT(ctx->buf);
 }

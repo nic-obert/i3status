@@ -1,1 +1,3 @@
-I can %haz literal% % ?
+{"version":1}
+[
+[{"name":"ethernet","instance":"NONEXISTINGETHERNETDEVICE","color":"#FF0000","full_text":"I can %haz literal% % ?"}]

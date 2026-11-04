@@ -1,1 +1,3 @@
-I can %haz literal% % ?
+{"version":1}
+[
+[{"name":"memory","full_text":"I can %haz literal% % ?"}]

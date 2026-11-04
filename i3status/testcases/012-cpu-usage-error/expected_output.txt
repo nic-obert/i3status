@@ -1,1 +1,3 @@
-cant read cpu usage
+{"version":1}
+[
+[{"name":"cpu_usage","full_text":"cant read cpu usage"}]

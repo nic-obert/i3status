@@ -30,12 +30,8 @@
 
 typedef struct {
     int flags;
-#ifdef IW_ESSID_MAX_SIZE
     char essid[IW_ESSID_MAX_SIZE + 1];
-#endif
-#ifdef __linux__
     uint8_t bssid[ETH_ALEN];
-#endif
     int quality;
     int quality_max;
     int quality_average;
@@ -329,7 +325,6 @@ void print_wireless_info(wireless_info_ctx_t *ctx) {
             START_COLOR("color_bad");
             outwalk += sprintf(outwalk, "%s", ctx->format_down);
 
-            END_COLOR;
             free(ipv4_address);
             free(ipv6_address);
             OUTPUT_FULL_TEXT(ctx->buf);
@@ -393,11 +388,9 @@ void print_wireless_info(wireless_info_ctx_t *ctx) {
         snprintf(string_noise, STRING_SIZE, "?");
     }
 
-#ifdef IW_ESSID_MAX_SIZE
     if (info.flags & WIRELESS_INFO_FLAG_HAS_ESSID)
-        maybe_escape_markup(info.essid, string_essid, STRING_SIZE);
+        snprintf(string_essid, STRING_SIZE, "%s", info.essid);
     else
-#endif
         snprintf(string_essid, STRING_SIZE, "?");
 
     if (info.flags & WIRELESS_INFO_FLAG_HAS_FREQUENCY)
@@ -423,7 +416,6 @@ void print_wireless_info(wireless_info_ctx_t *ctx) {
     OUTPUT_FORMATTED;
     free(formatted);
 
-    END_COLOR;
     free(ipv4_address);
     free(ipv6_address);
     OUTPUT_FULL_TEXT(ctx->buf);

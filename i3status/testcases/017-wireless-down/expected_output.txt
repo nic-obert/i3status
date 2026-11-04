@@ -1,1 +1,3 @@
-W: down
+{"version":1}
+[
+[{"name":"wireless","instance":"nonsense","color":"#FF0000","full_text":"W: down"}]
