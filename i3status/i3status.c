@@ -1,7 +1,5 @@
 /*
- * vim:ts=4:sw=4:expandtab
- *
- * i3status – Generates a status line for dzen2 or xmobar
+ * i3status – Generates a status line
  *
  * Copyright © 2008 Michael Stapelberg and contributors
  * Copyright © 2009 Thorsten Toepper <atsutane at freethoughts dot de>
@@ -12,7 +10,6 @@
  *
  */
 #include <config.h>
-#include <limits.h>
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -33,9 +30,6 @@
 
 #include "i3status.h"
 
-#define CFG_CUSTOM_ALIGN_OPT \
-    CFG_STR_CB("align", NULL, CFGF_NONE, parse_align)
-
 #define CFG_COLOR_OPTS(good, degraded, bad)             \
     CFG_STR("color_good", good, CFGF_NONE),             \
         CFG_STR("color_degraded", degraded, CFGF_NONE), \
@@ -43,14 +37,36 @@
 
 #define CFG_CUSTOM_COLOR_OPTS CFG_COLOR_OPTS(NULL, NULL, NULL)
 
-#define CFG_CUSTOM_MIN_WIDTH_OPT \
-    CFG_PTR_CB("min_width", NULL, CFGF_NONE, parse_min_width, free)
+typedef enum {
+    ITEM_NONE,
+    ITEM_IPV6,
+    ITEM_WIRELESS,
+    ITEM_ETHERNET,
+    ITEM_BATTERY,
+    ITEM_LOAD,
+    ITEM_MEMORY,
+    ITEM_TZTIME,
+    ITEM_VOLUME,
+    ITEM_CPU_TEMPERATURE,
+    ITEM_CPU_USAGE,
+} item_type_t;
 
-#define CFG_CUSTOM_SEPARATOR_OPT \
-    CFG_BOOL("separator", 0, CFGF_NODEFAULT)
-
-#define CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT \
-    CFG_INT("separator_block_width", 0, CFGF_NODEFAULT)
+typedef struct {
+    item_type_t type;
+    const char *title;
+    union {
+        ipv6_info_ctx_t ipv6;
+        wireless_info_ctx_t wireless;
+        eth_info_ctx_t ethernet;
+        battery_info_ctx_t battery;
+        load_ctx_t load;
+        memory_ctx_t memory;
+        time_ctx_t tztime;
+        volume_ctx_t volume;
+        cpu_temperature_ctx_t cpu_temperature;
+        cpu_usage_ctx_t cpu_usage;
+    } ctx;
+} status_item_t;
 
 /* socket file descriptor for general purposes */
 int general_socket;
@@ -59,8 +75,6 @@ static bool exit_upon_signal = false;
 static bool run_once = false;
 
 cfg_t *cfg, *cfg_general, *cfg_section;
-
-void **cur_instance;
 
 pthread_t main_thread;
 
@@ -90,59 +104,6 @@ void sigusr1(int signum) {
 static bool path_exists(const char *path) {
     struct stat buf;
     return (stat(path, &buf) == 0);
-}
-
-/*
- * Parses the "align" module option (to validate input).
- */
-static int parse_align(cfg_t *context, cfg_opt_t *option, const char *value, void *result) {
-    if (strcasecmp(value, "left") != 0 && strcasecmp(value, "right") != 0 && strcasecmp(value, "center") != 0)
-        die("Invalid alignment attribute found in section %s, line %d: \"%s\"\n"
-            "Valid attributes are: left, center, right\n",
-            context->name, context->line, value);
-
-    const char **cresult = result;
-    *cresult = value;
-
-    return 0;
-}
-
-/*
- * Parses the "min_width" module option whose value can either be a string or an integer.
- */
-static int parse_min_width(cfg_t *context, cfg_opt_t *option, const char *value, void *result) {
-    char *end;
-    long num = strtol(value, &end, 10);
-
-    if (num < 0)
-        die("Invalid min_width attribute found in section %s, line %d: %ld\n"
-            "Expected positive integer or string\n",
-            context->name, context->line, num);
-    else if (num == LONG_MIN || num == LONG_MAX || (end && *end != '\0'))
-        num = 0;
-
-    if (strlen(value) == 0)
-        die("Empty min_width attribute found in section %s, line %d\n"
-            "Expected positive integer or non-empty string\n",
-            context->name, context->line);
-
-    if (strcmp(value, "0") == 0)
-        die("Invalid min_width attribute found in section %s, line %d: \"%s\"\n"
-            "Expected positive integer or string\n",
-            context->name, context->line, value);
-
-    struct min_width *parsed = scalloc(sizeof(struct min_width));
-    parsed->num = num;
-
-    /* num is preferred, but if it’s 0 (i.e. not valid), store and use
-     * the raw string value */
-    if (num == 0)
-        parsed->str = sstrdup(value);
-
-    struct min_width **cresult = result;
-    *cresult = parsed;
-
-    return 0;
 }
 
 /*
@@ -237,31 +198,19 @@ int main(int argc, char *argv[]) {
         CFG_STR("format_noise", "%3d%s", CFGF_NONE),
         CFG_STR("format_quality", "%3d%s", CFGF_NONE),
         CFG_STR("format_signal", "%3d%s", CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
         CFG_CUSTOM_COLOR_OPTS,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
         CFG_END()};
 
     cfg_opt_t ethernet_opts[] = {
         CFG_STR("format_up", "E: %ip (%speed)", CFGF_NONE),
         CFG_STR("format_down", "E: down", CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
         CFG_CUSTOM_COLOR_OPTS,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
         CFG_END()};
 
     cfg_opt_t ipv6_opts[] = {
         CFG_STR("format_up", "%ip", CFGF_NONE),
         CFG_STR("format_down", "no IPv6", CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
         CFG_CUSTOM_COLOR_OPTS,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
         CFG_END()};
 
     cfg_opt_t battery_opts[] = {
@@ -279,19 +228,7 @@ int main(int argc, char *argv[]) {
         CFG_BOOL("last_full_capacity", false, CFGF_NONE),
         CFG_BOOL("integer_battery_capacity", false, CFGF_NONE),
         CFG_BOOL("hide_seconds", true, CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
         CFG_CUSTOM_COLOR_OPTS,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
-        CFG_END()};
-
-    cfg_opt_t time_opts[] = {
-        CFG_STR("format", "%Y-%m-%d %H:%M:%S", CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
         CFG_END()};
 
     cfg_opt_t tztime_opts[] = {
@@ -300,21 +237,13 @@ int main(int argc, char *argv[]) {
         CFG_STR("locale", "", CFGF_NONE),
         CFG_STR("format_time", NULL, CFGF_NONE),
         CFG_BOOL("hide_if_equals_localtime", false, CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
         CFG_END()};
 
     cfg_opt_t load_opts[] = {
         CFG_STR("format", "%1min %5min %15min", CFGF_NONE),
         CFG_STR("format_above_threshold", NULL, CFGF_NONE),
         CFG_FLOAT("max_threshold", 5, CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
         CFG_CUSTOM_COLOR_OPTS,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
         CFG_END()};
 
     cfg_opt_t memory_opts[] = {
@@ -325,11 +254,7 @@ int main(int argc, char *argv[]) {
         CFG_STR("memory_used_method", "classical", CFGF_NONE),
         CFG_STR("unit", "auto", CFGF_NONE),
         CFG_INT("decimals", 1, CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
         CFG_CUSTOM_COLOR_OPTS,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
         CFG_END()};
 
     cfg_opt_t usage_opts[] = {
@@ -339,11 +264,7 @@ int main(int argc, char *argv[]) {
         CFG_STR("path", "/proc/stat", CFGF_NONE),
         CFG_FLOAT("max_threshold", 95, CFGF_NONE),
         CFG_FLOAT("degraded_threshold", 90, CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
         CFG_CUSTOM_COLOR_OPTS,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
         CFG_END()};
 
     cfg_opt_t temp_opts[] = {
@@ -351,11 +272,7 @@ int main(int argc, char *argv[]) {
         CFG_STR("format_above_threshold", NULL, CFGF_NONE),
         CFG_STR("path", NULL, CFGF_NONE),
         CFG_INT("max_threshold", 75, CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
         CFG_CUSTOM_COLOR_OPTS,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
         CFG_END()};
 
     cfg_opt_t volume_opts[] = {
@@ -364,11 +281,7 @@ int main(int argc, char *argv[]) {
         CFG_STR("device", "default", CFGF_NONE),
         CFG_STR("mixer", "Master", CFGF_NONE),
         CFG_INT("mixer_idx", 0, CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
         CFG_CUSTOM_COLOR_OPTS,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
         CFG_END()};
 
     cfg_opt_t opts[] = {
@@ -380,7 +293,6 @@ int main(int argc, char *argv[]) {
         CFG_SEC("cpu_temperature", temp_opts, CFGF_TITLE | CFGF_MULTI),
         CFG_SEC("volume", volume_opts, CFGF_TITLE | CFGF_MULTI),
         CFG_SEC("ipv6", ipv6_opts, CFGF_NONE),
-        CFG_SEC("time", time_opts, CFGF_NONE),
         CFG_SEC("tztime", tztime_opts, CFGF_TITLE | CFGF_MULTI),
         CFG_SEC("load", load_opts, CFGF_NONE),
         CFG_SEC("memory", memory_opts, CFGF_NONE),
@@ -446,7 +358,8 @@ int main(int argc, char *argv[]) {
     if (cfg_parse(cfg, configfile) == CFG_PARSE_ERROR)
         return EXIT_FAILURE;
 
-    if (cfg_size(cfg, "order") == 0)
+    unsigned int order_size = cfg_size(cfg, "order");
+    if (order_size == 0)
         die("Your 'order' array is empty. Please fix your config.\n");
 
     cfg_general = cfg_getsec(cfg, "general");
@@ -475,34 +388,196 @@ int main(int argc, char *argv[]) {
             cfg_general->name, cfg_general->line, interval);
     }
 
-    for (int j = 0; j < cfg_size(cfg, "order"); j++) {
+    /* 512 bytes which each plugin can use to buffer output.
+     * Even though it’s unclean, we just assume that the user will not
+     * specify a format string which expands to something longer than 512
+     * bytes
+    */
+    char buffer[512];
+
+    /*
+    Pre-build cfg structs and initialize their static fields.
+    This prevents reduntant calls to cfg_* functions.
+    */
+    cfg_t *_sec;
+    _sec = cfg_getsec(cfg, "ipv6");
+    ipv6_info_ctx_t ipv6_ctx = {
+        .json_gen = json_gen,
+        .buf = buffer,
+        .buflen = sizeof(buffer),
+        .format_up = cfg_getstr(_sec, "format_up"),
+        .format_down = cfg_getstr(_sec, "format_down"),
+    };
+    _sec = cfg_getsec(cfg, "load");
+    load_ctx_t load_ctx = {
+        .json_gen = json_gen,
+        .buf = buffer,
+        .buflen = sizeof(buffer),
+        .format = cfg_getstr(_sec, "format"),
+        .format_above_threshold = cfg_getstr(_sec, "format_above_threshold"),
+        .max_threshold = cfg_getfloat(_sec, "max_threshold"),
+    };
+    _sec = cfg_getsec(cfg, "cpu_usage");
+    cpu_usage_ctx_t cpu_usage_ctx = {
+        .json_gen = json_gen,
+        .buf = buffer,
+        .buflen = sizeof(buffer),
+        .format = cfg_getstr(_sec, "format"),
+        .format_above_threshold = cfg_getstr(_sec, "format_above_threshold"),
+        .format_above_degraded_threshold = cfg_getstr(_sec, "format_above_degraded_threshold"),
+        .path = cfg_getstr(_sec, "path"),
+        .max_threshold = cfg_getfloat(_sec, "max_threshold"),
+        .degraded_threshold = cfg_getfloat(_sec, "degraded_threshold"),
+    };
+    _sec = cfg_getsec(cfg, "memory");
+    memory_ctx_t memory_ctx = {
+        .json_gen = json_gen,
+        .buf = buffer,
+        .buflen = sizeof(buffer),
+        .format = cfg_getstr(_sec, "format"),
+        .format_degraded = cfg_getstr(_sec, "format_degraded"),
+        .threshold_degraded = cfg_getstr(_sec, "threshold_degraded"),
+        .threshold_critical = cfg_getstr(_sec, "threshold_critical"),
+        .memory_used_method = cfg_getstr(_sec, "memory_used_method"),
+        .unit = cfg_getstr(_sec, "unit"),
+        .decimals = cfg_getint(_sec, "decimals"),
+    };
+    
+    status_item_t *items = calloc(order_size, sizeof(*items));
+    if (items == NULL)
+        die("calloc() failed\n");
+
+    for (j = 0; j < order_size; j++) {
         const char *current = cfg_getnstr(cfg, "order", j);
-        const char *name = "battery";
-        if (!BEGINS_WITH(current, name)) {
-            continue;
-        }
-        const char *title = current + strlen(name) + 1;
-        cfg_section = cfg_gettsec(cfg, name, title);
-        bool integer_battery_capacity = cfg_getbool(cfg_section, "integer_battery_capacity");
-        char *format_percentage = cfg_getstr(cfg_section, "format_percentage");
-        if (integer_battery_capacity) {
-            if (strcmp("%.02f%s", format_percentage) == 0) {
-                cfg_setstr(cfg_section, "format_percentage", "%.00f%s");
-            } else {
-                fprintf(stderr, "i3status: integer_battery_capacity is deprecated\n");
+        status_item_t *item = &items[j];
+
+        if (BEGINS_WITH(current, "ipv6")) {
+            item->type = ITEM_IPV6;
+            memcpy(&item->ctx.ipv6, &ipv6_ctx, sizeof(item->ctx.ipv6));
+        } else if (BEGINS_WITH(current, "wireless")) {
+            item->type = ITEM_WIRELESS;
+            item->title = current + strlen("wireless") + 1;
+            cfg_t *sec = cfg_gettsec(cfg, "wireless", item->title);
+            if (sec == NULL)
+                continue;
+            memcpy(&item->ctx.wireless, &(wireless_info_ctx_t){
+                .json_gen = json_gen,
+                .buf = buffer,
+                .buflen = sizeof(buffer),
+                .interface = item->title,
+                .format_up = cfg_getstr(sec, "format_up"),
+                .format_down = cfg_getstr(sec, "format_down"),
+                .format_bitrate = cfg_getstr(sec, "format_bitrate"),
+                .format_noise = cfg_getstr(sec, "format_noise"),
+                .format_quality = cfg_getstr(sec, "format_quality"),
+                .format_signal = cfg_getstr(sec, "format_signal"),
+            }, sizeof(item->ctx.wireless));
+        } else if (BEGINS_WITH(current, "ethernet")) {
+            item->type = ITEM_ETHERNET;
+            item->title = current + strlen("ethernet") + 1;
+            cfg_t *sec = cfg_gettsec(cfg, "ethernet", item->title);
+            if (sec == NULL)
+                continue;
+            memcpy(&item->ctx.ethernet, &(eth_info_ctx_t){
+                .json_gen = json_gen,
+                .buf = buffer,
+                .buflen = sizeof(buffer),
+                .interface = item->title,
+                .format_up = cfg_getstr(sec, "format_up"),
+                .format_down = cfg_getstr(sec, "format_down"),
+            }, sizeof(item->ctx.ethernet));
+        } else if (BEGINS_WITH(current, "battery")) {
+            item->type = ITEM_BATTERY;
+            item->title = current + strlen("battery") + 1;
+            cfg_t *sec = cfg_gettsec(cfg, "battery", item->title);
+            if (sec == NULL)
+                continue;
+            char *format_percentage = cfg_getstr(sec, "format_percentage");
+            if (cfg_getbool(sec, "integer_battery_capacity")) {
+                if (strcmp("%.02f%s", format_percentage) == 0)
+                    cfg_setstr(sec, "format_percentage", "%.00f%s");
+                else
+                    fprintf(stderr, "i3status: integer_battery_capacity is deprecated\n");
             }
+            memcpy(&item->ctx.battery, &(battery_info_ctx_t){
+                .json_gen = json_gen,
+                .buf = buffer,
+                .buflen = sizeof(buffer),
+                .number = strcasecmp(item->title, "all") == 0 ? -1 : atoi(item->title),
+                .path = cfg_getstr(sec, "path"),
+                .format = cfg_getstr(sec, "format"),
+                .format_down = cfg_getstr(sec, "format_down"),
+                .status_chr = cfg_getstr(sec, "status_chr"),
+                .status_bat = cfg_getstr(sec, "status_bat"),
+                .status_unk = cfg_getstr(sec, "status_unk"),
+                .status_full = cfg_getstr(sec, "status_full"),
+                .status_idle = cfg_getstr(sec, "status_idle"),
+                .low_threshold = cfg_getint(sec, "low_threshold"),
+                .threshold_type = cfg_getstr(sec, "threshold_type"),
+                .last_full_capacity = cfg_getbool(sec, "last_full_capacity"),
+                .format_percentage = cfg_getstr(sec, "format_percentage"),
+                .hide_seconds = cfg_getbool(sec, "hide_seconds"),
+            }, sizeof(item->ctx.battery));
+        } else if (BEGINS_WITH(current, "load")) {
+            item->type = ITEM_LOAD;
+            memcpy(&item->ctx.load, &load_ctx, sizeof(item->ctx.load));
+        } else if (BEGINS_WITH(current, "memory")) {
+            item->type = ITEM_MEMORY;
+            memcpy(&item->ctx.memory, &memory_ctx, sizeof(item->ctx.memory));
+        } else if (BEGINS_WITH(current, "tztime")) {
+            item->type = ITEM_TZTIME;
+            item->title = current + strlen("tztime") + 1;
+            cfg_t *sec = cfg_gettsec(cfg, "tztime", item->title);
+            if (sec == NULL)
+                continue;
+            memcpy(&item->ctx.tztime, &(time_ctx_t){
+                .json_gen = json_gen,
+                .buf = buffer,
+                .buflen = sizeof(buffer),
+                .title = item->title,
+                .format = cfg_getstr(sec, "format"),
+                .tz = cfg_getstr(sec, "timezone"),
+                .locale = cfg_getstr(sec, "locale"),
+                .format_time = cfg_getstr(sec, "format_time"),
+                .hide_if_equals_localtime = cfg_getbool(sec, "hide_if_equals_localtime"),
+            }, sizeof(item->ctx.tztime));
+        } else if (BEGINS_WITH(current, "volume")) {
+            item->type = ITEM_VOLUME;
+            item->title = current + strlen("volume") + 1;
+            cfg_t *sec = cfg_gettsec(cfg, "volume", item->title);
+            if (sec == NULL)
+                continue;
+            memcpy(&item->ctx.volume, &(volume_ctx_t){
+                .json_gen = json_gen,
+                .buf = buffer,
+                .buflen = sizeof(buffer),
+                .fmt = cfg_getstr(sec, "format"),
+                .fmt_muted = cfg_getstr(sec, "format_muted"),
+                .device = cfg_getstr(sec, "device"),
+                .mixer = cfg_getstr(sec, "mixer"),
+                .mixer_idx = cfg_getint(sec, "mixer_idx"),
+            }, sizeof(item->ctx.volume));
+        } else if (BEGINS_WITH(current, "cpu_temperature")) {
+            item->type = ITEM_CPU_TEMPERATURE;
+            item->title = current + strlen("cpu_temperature") + 1;
+            cfg_t *sec = cfg_gettsec(cfg, "cpu_temperature", item->title);
+            if (sec == NULL)
+                continue;
+            memcpy(&item->ctx.cpu_temperature, &(cpu_temperature_ctx_t){
+                .json_gen = json_gen,
+                .buf = buffer,
+                .buflen = sizeof(buffer),
+                .zone = atoi(item->title),
+                .path = cfg_getstr(sec, "path"),
+                .format = cfg_getstr(sec, "format"),
+                .format_above_threshold = cfg_getstr(sec, "format_above_threshold"),
+                .max_threshold = cfg_getint(sec, "max_threshold"),
+            }, sizeof(item->ctx.cpu_temperature));
+        } else if (BEGINS_WITH(current, "cpu_usage")) {
+            item->type = ITEM_CPU_USAGE;
+            memcpy(&item->ctx.cpu_usage, &cpu_usage_ctx, sizeof(item->ctx.cpu_usage));
         }
     }
-
-    /* One memory page which each plugin can use to buffer output.
-     * Even though it’s unclean, we just assume that the user will not
-     * specify a format string which expands to something longer than 4096
-     * bytes — given that the output of i3status is used to display
-     * information on screen, more than 1024 characters for the full line
-     * (!), not individual plugins, seem very unlikely. */
-    char buffer[4096];
-
-    void **per_instance = calloc(cfg_size(cfg, "order"), sizeof(*per_instance));
 
     while (1) {
         if (exit_upon_signal) {
@@ -512,206 +587,83 @@ int main(int argc, char *argv[]) {
         struct timeval tv;
         gettimeofday(&tv, NULL);
         yajl_gen_array_open(json_gen);
-        for (j = 0; j < cfg_size(cfg, "order"); j++) {
-            cur_instance = per_instance + j;
+        for (j = 0; j < order_size; j++) {
+            status_item_t *item = &items[j];
 
-            const char *current = cfg_getnstr(cfg, "order", j);
-
-            CASE_SEC("ipv6") {
+            switch (item->type) {
+            case ITEM_IPV6:
                 SEC_OPEN_MAP("ipv6");
-                ipv6_info_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .format_up = cfg_getstr(sec, "format_up"),
-                    .format_down = cfg_getstr(sec, "format_down"),
-                };
-                print_ipv6_info(&ctx);
+                print_ipv6_info(&item->ctx.ipv6);
                 SEC_CLOSE_MAP;
-            }
+                break;
 
-            CASE_SEC_TITLE("wireless") {
+            case ITEM_WIRELESS:
+                if (strcasecmp(item->title, "_first_") == 0)
+                    item->ctx.wireless.interface =
+                        first_eth_interface(NET_TYPE_WIRELESS);
+                if (item->ctx.wireless.interface == NULL)
+                    item->ctx.wireless.interface = item->title;
                 SEC_OPEN_MAP("wireless");
-                const char *interface = NULL;
-                if (strcasecmp(title, "_first_") == 0)
-                    interface = first_eth_interface(NET_TYPE_WIRELESS);
-                if (interface == NULL)
-                    interface = title;
-                wireless_info_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .interface = interface,
-                    .format_up = cfg_getstr(sec, "format_up"),
-                    .format_down = cfg_getstr(sec, "format_down"),
-                    .format_bitrate = cfg_getstr(sec, "format_bitrate"),
-                    .format_noise = cfg_getstr(sec, "format_noise"),
-                    .format_quality = cfg_getstr(sec, "format_quality"),
-                    .format_signal = cfg_getstr(sec, "format_signal"),
-                };
-                print_wireless_info(&ctx);
+                print_wireless_info(&item->ctx.wireless);
                 SEC_CLOSE_MAP;
-            }
+                break;
 
-            CASE_SEC_TITLE("ethernet") {
+            case ITEM_ETHERNET:
+                if (strcasecmp(item->title, "_first_") == 0)
+                    item->ctx.ethernet.interface =
+                        first_eth_interface(NET_TYPE_ETHERNET);
+                if (item->ctx.ethernet.interface == NULL)
+                    item->ctx.ethernet.interface = item->title;
                 SEC_OPEN_MAP("ethernet");
-                const char *interface = NULL;
-                if (strcasecmp(title, "_first_") == 0)
-                    interface = first_eth_interface(NET_TYPE_ETHERNET);
-                if (interface == NULL)
-                    interface = title;
-                eth_info_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .interface = interface,
-                    .format_up = cfg_getstr(sec, "format_up"),
-                    .format_down = cfg_getstr(sec, "format_down"),
-                };
-                print_eth_info(&ctx);
+                print_eth_info(&item->ctx.ethernet);
                 SEC_CLOSE_MAP;
-            }
+                break;
 
-            CASE_SEC_TITLE("battery") {
+            case ITEM_BATTERY:
                 SEC_OPEN_MAP("battery");
-                battery_info_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .number = (strcasecmp(title, "all") == 0 ? -1 : atoi(title)),
-                    .path = cfg_getstr(sec, "path"),
-                    .format = cfg_getstr(sec, "format"),
-                    .format_down = cfg_getstr(sec, "format_down"),
-                    .status_chr = cfg_getstr(sec, "status_chr"),
-                    .status_bat = cfg_getstr(sec, "status_bat"),
-                    .status_unk = cfg_getstr(sec, "status_unk"),
-                    .status_full = cfg_getstr(sec, "status_full"),
-                    .status_idle = cfg_getstr(sec, "status_idle"),
-                    .low_threshold = cfg_getint(sec, "low_threshold"),
-                    .threshold_type = cfg_getstr(sec, "threshold_type"),
-                    .last_full_capacity = cfg_getbool(sec, "last_full_capacity"),
-                    .format_percentage = cfg_getstr(sec, "format_percentage"),
-                    .hide_seconds = cfg_getbool(sec, "hide_seconds"),
-                };
-                print_battery_info(&ctx);
+                print_battery_info(&item->ctx.battery);
                 SEC_CLOSE_MAP;
-            }
+                break;
 
-            CASE_SEC("load") {
+            case ITEM_LOAD:
                 SEC_OPEN_MAP("load");
-                load_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .format = cfg_getstr(sec, "format"),
-                    .format_above_threshold = cfg_getstr(sec, "format_above_threshold"),
-                    .max_threshold = cfg_getfloat(sec, "max_threshold"),
-                };
-                print_load(&ctx);
+                print_load(&item->ctx.load);
                 SEC_CLOSE_MAP;
-            }
+                break;
 
-            CASE_SEC("memory") {
+            case ITEM_MEMORY:
                 SEC_OPEN_MAP("memory");
-                memory_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .format = cfg_getstr(sec, "format"),
-                    .format_degraded = cfg_getstr(sec, "format_degraded"),
-                    .threshold_degraded = cfg_getstr(sec, "threshold_degraded"),
-                    .threshold_critical = cfg_getstr(sec, "threshold_critical"),
-                    .memory_used_method = cfg_getstr(sec, "memory_used_method"),
-                    .unit = cfg_getstr(sec, "unit"),
-                    .decimals = cfg_getint(sec, "decimals"),
-                };
-                print_memory(&ctx);
+                print_memory(&item->ctx.memory);
                 SEC_CLOSE_MAP;
-            }
+                break;
 
-            CASE_SEC("time") {
-                SEC_OPEN_MAP("time");
-                time_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .title = NULL,
-                    .format = cfg_getstr(sec, "format"),
-                    .tz = NULL,
-                    .locale = NULL,
-                    .format_time = NULL,
-                    .hide_if_equals_localtime = false,
-                    .t = tv.tv_sec,
-                };
-                print_time(&ctx);
-                SEC_CLOSE_MAP;
-            }
-
-            CASE_SEC_TITLE("tztime") {
+            case ITEM_TZTIME:
                 SEC_OPEN_MAP("tztime");
-                time_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .title = title,
-                    .format = cfg_getstr(sec, "format"),
-                    .tz = cfg_getstr(sec, "timezone"),
-                    .locale = cfg_getstr(sec, "locale"),
-                    .format_time = cfg_getstr(sec, "format_time"),
-                    .hide_if_equals_localtime = cfg_getbool(sec, "hide_if_equals_localtime"),
-                    .t = tv.tv_sec,
-                };
-                print_time(&ctx);
+                item->ctx.tztime.t = tv.tv_sec;
+                print_time(&item->ctx.tztime);
                 SEC_CLOSE_MAP;
-            }
+                break;
 
-            CASE_SEC_TITLE("volume") {
+            case ITEM_VOLUME:
                 SEC_OPEN_MAP("volume");
-                volume_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .fmt = cfg_getstr(sec, "format"),
-                    .fmt_muted = cfg_getstr(sec, "format_muted"),
-                    .device = cfg_getstr(sec, "device"),
-                    .mixer = cfg_getstr(sec, "mixer"),
-                    .mixer_idx = cfg_getint(sec, "mixer_idx"),
-                };
-                print_volume(&ctx);
+                print_volume(&item->ctx.volume);
                 SEC_CLOSE_MAP;
-            }
+                break;
 
-            CASE_SEC_TITLE("cpu_temperature") {
+            case ITEM_CPU_TEMPERATURE:
                 SEC_OPEN_MAP("cpu_temperature");
-                cpu_temperature_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .zone = atoi(title),
-                    .path = cfg_getstr(sec, "path"),
-                    .format = cfg_getstr(sec, "format"),
-                    .format_above_threshold = cfg_getstr(sec, "format_above_threshold"),
-                    .max_threshold = cfg_getint(sec, "max_threshold"),
-                };
-                print_cpu_temperature_info(&ctx);
+                print_cpu_temperature_info(&item->ctx.cpu_temperature);
                 SEC_CLOSE_MAP;
-            }
+                break;
 
-            CASE_SEC("cpu_usage") {
+            case ITEM_CPU_USAGE:
                 SEC_OPEN_MAP("cpu_usage");
-                cpu_usage_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .format = cfg_getstr(sec, "format"),
-                    .format_above_threshold = cfg_getstr(sec, "format_above_threshold"),
-                    .format_above_degraded_threshold = cfg_getstr(sec, "format_above_degraded_threshold"),
-                    .path = cfg_getstr(sec, "path"),
-                    .max_threshold = cfg_getfloat(sec, "max_threshold"),
-                    .degraded_threshold = cfg_getfloat(sec, "degraded_threshold"),
-                };
-                print_cpu_usage(&ctx);
+                print_cpu_usage(&item->ctx.cpu_usage);
                 SEC_CLOSE_MAP;
+                break;
+
+            case ITEM_NONE:
+                break;
             }
         }
         yajl_gen_array_close(json_gen);

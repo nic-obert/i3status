@@ -23,20 +23,6 @@
 
 #define THERMAL_ZONE "/sys/class/thermal/thermal_zone%d/temp"
 
-/* Allows for the definition of a variable without opening a new scope, thus
- * suited for usage in a macro. Idea from wmii. */
-#define with(type, var, init) \
-    for (type var = (type)-1; (var == (type)-1) && ((var = (init)) || 1); var = (type)1)
-
-#define CASE_SEC(name)              \
-    if (BEGINS_WITH(current, name)) \
-    with(cfg_t *, sec, cfg_section = cfg_getsec(cfg, name)) if (sec != NULL)
-
-#define CASE_SEC_TITLE(name)                              \
-    if (BEGINS_WITH(current, name))                       \
-    with(const char *, title, current + strlen(name) + 1) \
-        with(cfg_t *, sec, cfg_section = cfg_gettsec(cfg, name, title)) if (sec != NULL)
-
 /* Macro which any plugin can use to output the full_text part (when the output
  * format is JSON) or just output to stdout (any other output format). */
 #define OUTPUT_FULL_TEXT(text)                                                                       \
@@ -57,30 +43,6 @@
 
 #define SEC_CLOSE_MAP                                                                                                       \
     do {                                                                                                                    \
-        char *_align = cfg_getstr(sec, "align");                                                                        \
-        if (_align) {                                                                                                   \
-            yajl_gen_string(json_gen, (const unsigned char *)"align", strlen("align"));                                 \
-            yajl_gen_string(json_gen, (const unsigned char *)_align, strlen(_align));                                   \
-        }                                                                                                               \
-        struct min_width *_width = cfg_getptr(sec, "min_width");                                                        \
-        if (_width) {                                                                                                   \
-            /* if the value can be parsed as a number, we use the numerical value */                                    \
-            if (_width->num > 0) {                                                                                      \
-                yajl_gen_string(json_gen, (const unsigned char *)"min_width", strlen("min_width"));                     \
-                yajl_gen_integer(json_gen, _width->num);                                                                \
-            } else {                                                                                                    \
-                yajl_gen_string(json_gen, (const unsigned char *)"min_width", strlen("min_width"));                     \
-                yajl_gen_string(json_gen, (const unsigned char *)_width->str, strlen(_width->str));                     \
-            }                                                                                                           \
-        }                                                                                                               \
-        if (cfg_size(sec, "separator") > 0) {                                                                           \
-            yajl_gen_string(json_gen, (const unsigned char *)"separator", strlen("separator"));                         \
-            yajl_gen_bool(json_gen, cfg_getbool(sec, "separator"));                                                     \
-        }                                                                                                               \
-        if (cfg_size(sec, "separator_block_width") > 0) {                                                               \
-            yajl_gen_string(json_gen, (const unsigned char *)"separator_block_width", strlen("separator_block_width")); \
-            yajl_gen_integer(json_gen, cfg_getint(sec, "separator_block_width"));                                       \
-        }                                                                                                               \
         const char *_sep = cfg_getstr(cfg_general, "separator");                                                        \
         if (strlen(_sep) == 0) {                                                                                        \
             yajl_gen_string(json_gen, (const unsigned char *)"separator", strlen("separator"));                         \
@@ -114,14 +76,6 @@
         strncpy(outwalk, formatted, remaining);                      \
         outwalk += strlen(formatted);                                \
     } while (0)
-
-/*
- * The "min_width" module option may either be defined as a string or a number.
- */
-struct min_width {
-    long num;
-    const char *str;
-};
 
 /* src/general.c */
 char *skip_character(char *input, char character, int amount);
@@ -330,8 +284,6 @@ typedef struct {
 extern int general_socket;
 
 extern cfg_t *cfg, *cfg_general, *cfg_section;
-
-extern void **cur_instance;
 
 extern pthread_t main_thread;
 #endif

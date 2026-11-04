@@ -672,50 +672,10 @@ can't be read "error read" will be printed.
 
 *Example Max_characters*: 255
 
-== Universal module options
-
-When using the i3bar output format, there are a few additional options that
-can be used with all modules to customize their appearance:
-
-align::
-	The alignment policy to use when the minimum width (see below) is not
-	reached. Either +center+ (default), +right+ or +left+.
-min_width::
-	The minimum width (in pixels) the module should occupy. If the module takes
-	less space than the specified size, the block will be padded to the left
-	and/or the right side, according to the defined alignment policy. This is
-	useful when you want to prevent the whole status line from shifting when
-	values take more or less space between each iteration.
-	The option can also be a string. In this case, the width of the given text
-	determines the minimum width of the block. This is useful when you want to
-	set a sensible minimum width regardless of which font you are using, and at
-	what particular size. Please note that a number enclosed with quotes will
-	still be treated as a number.
-separator::
-	A boolean value which specifies whether a separator line should be drawn
-	after this block. The default is true, meaning the separator line will be
-	drawn. Note that if you disable the separator line, there will still be a
-	gap after the block, unless you also use +separator_block_width+.
-separator_block_width::
-	The amount of pixels to leave blank after the block. In the middle of this
-	gap, a separator symbol will be drawn unless separator is disabled. This is
-	why the specified width should leave enough space for the separator symbol.
-
-*Example configuration*:
--------------------------------------------------------------
-disk "/" {
-    format = "%avail"
-    align = "left"
-    min_width = 100
-    separator = false
-    separator_block_width = 1
-}
--------------------------------------------------------------
-
 == Using i3status with dzen2
 
 After installing dzen2, you can directly use it with i3status. Just ensure that
-+output_format+ is set to +dzen2+. *Note*: +min_width+ is not supported.
++output_format+ is set to +dzen2+.
 
 *Example for usage of i3status with dzen2*:
 --------------------------------------------------------------
@@ -727,7 +687,7 @@ i3status | dzen2 -fg white -ta r -w 1280 \
 
 To get xmobar to start, you might need to copy the default configuration
 file to +~/.xmobarrc+. Also, ensure that the +output_format+ option for i3status
-is set to +xmobar+. *Note*: +min_width+ is not supported.
+is set to +xmobar+.
 
 *Example for usage of i3status with xmobar*:
 ---------------------------------------------------------------------
