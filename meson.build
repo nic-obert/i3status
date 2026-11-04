@@ -6,28 +6,21 @@
 project(
   'i3status',
   'c',
-  version: '2.15',
+  version: '3.0',
   default_options: [
     'c_std=c11',
     'warning_level=1',  # enable all warnings (-Wall)
     # TODO(https://github.com/i3/i3/issues/4087): switch to
     # 'buildtype=debugoptimized',
   ],
-  # Ubuntu 18.04 (supported until 2023) has meson 0.45.
-  # We can revisit our minimum supported meson version
-  # if it turns out to be too hard to maintain.
-  meson_version: '>=0.45.0',
+  meson_version: '>=0.53.0',
 )
 
 cc = meson.get_compiler('c')
 add_project_arguments(cc.get_supported_arguments(['-Wunused-value']), language: 'c')
 
-if meson.version().version_compare('>=0.48.0')
-  # https://github.com/mesonbuild/meson/issues/2166#issuecomment-629696911
-  meson.add_dist_script('meson/meson-dist-script')
-else
-  message('meson <0.48.0 detected, dist tarballs will not be filtered')
-endif
+# https://github.com/mesonbuild/meson/issues/2166#issuecomment-629696911
+meson.add_dist_script('meson/meson-dist-script')
 
 ################################################################################
 # Version handling
@@ -46,9 +39,7 @@ endif
 cdata.set('HAVE_STRNDUP', cc.has_function('strndup'))
 cdata.set('HAVE_MKDIRP', cc.has_function('mkdirp'))
 
-if get_option('pulseaudio')
-  cdata.set('HAS_PULSEAUDIO', 1)
-endif
+cdata.set('HAS_PULSEAUDIO', 1)
 
 # Instead of generating config.h directly, make vcs_tag generate it so that
 # @VCS_TAG@ is replaced.
@@ -133,10 +124,8 @@ else
   endif
 endif
 
-if meson.version().version_compare('>=0.53')
-  summary('build manpages (-Dmans)', get_option('mans'))
-  summary('build pulseaudio support (-Dpulseaudio)', get_option('pulseaudio'))
-endif
+summary('build manpages (-Dmans)', get_option('mans'))
+summary('build pulseaudio support (-Dpulseaudio)', true)
 
 # Required for e.g. struct ucred to be defined as per unix(7).
 add_project_arguments('-D_GNU_SOURCE', language: 'c')
@@ -158,8 +147,6 @@ i3status_srcs = [
   'src/print_battery_info.c',
   'src/print_cpu_temperature.c',
   'src/print_cpu_usage.c',
-  'src/print_ddate.c',
-  'src/print_disk_info.c',
   'src/print_eth_info.c',
   'src/print_ip_addr.c',
   'src/print_ipv6_addr.c',
@@ -170,7 +157,6 @@ i3status_srcs = [
   'src/print_time.c',
   'src/print_volume.c',
   'src/print_wireless_info.c',
-  'src/print_file_contents.c',
   'src/process_runs.c',
 ]
 
@@ -185,11 +171,9 @@ i3status_deps = [
   config_h,
 ]
 
-if get_option('pulseaudio')
-  pulse_dep = dependency('libpulse', method: 'pkg-config')
-  i3status_deps += [pulse_dep]
-  i3status_srcs += ['src/pulse.c']
-endif
+pulse_dep = dependency('libpulse', method: 'pkg-config')
+i3status_deps += [pulse_dep]
+i3status_srcs += ['src/pulse.c']
 
 host_os = host_machine.system()
 if host_os == 'linux'
@@ -245,20 +229,10 @@ run_tests = custom_target(
 )
 
 perl = find_program('perl')
-if meson.version().version_compare('>=0.46.0')
-  test(
-    'run-tests',
-    perl,
-    args: [run_tests],
-    timeout: 120,  # Default of 30 seconds can cause timeouts on slower machines
-  )
-else
-  # meson < 0.46.0 does not support the depends arg in test targets.
-  # Just hope for the best.
-  test(
-    'run-tests',
-    perl,
-    args: [run_tests],
-  )
-  message('meson < 0.46 detected, you might need to run ninja test twice')
-endif
+test(
+  'run-tests',
+  perl,
+  args: [run_tests],
+  timeout: 120,  # Default of 30 seconds can cause timeouts on slower machines
+)
+

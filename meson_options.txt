@@ -8,6 +8,3 @@ option('mans', type: 'boolean', value: false,
 
 option('docdir', type: 'string', value: '',
        description: 'documentation directory (default: $datadir/docs/i3)')
-
-option('pulseaudio', type: 'boolean', value: true,
-       description: 'Build with pulseaudio support')

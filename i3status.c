@@ -356,14 +356,6 @@ int main(int argc, char *argv[]) {
         CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
         CFG_END()};
 
-    cfg_opt_t ddate_opts[] = {
-        CFG_STR("format", "%{%a, %b %d%}, %Y%N - %H", CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
-        CFG_END()};
-
     cfg_opt_t load_opts[] = {
         CFG_STR("format", "%1min %5min %15min", CFGF_NONE),
         CFG_STR("format_above_threshold", NULL, CFGF_NONE),
@@ -416,38 +408,12 @@ int main(int argc, char *argv[]) {
         CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
         CFG_END()};
 
-    cfg_opt_t disk_opts[] = {
-        CFG_STR("format", "%free", CFGF_NONE),
-        CFG_STR("format_below_threshold", NULL, CFGF_NONE),
-        CFG_STR("format_not_mounted", NULL, CFGF_NONE),
-        CFG_STR("prefix_type", "binary", CFGF_NONE),
-        CFG_STR("threshold_type", "percentage_avail", CFGF_NONE),
-        CFG_FLOAT("low_threshold", 0, CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
-        CFG_CUSTOM_COLOR_OPTS,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
-        CFG_END()};
-
     cfg_opt_t volume_opts[] = {
         CFG_STR("format", "♪: %volume", CFGF_NONE),
         CFG_STR("format_muted", "♪: 0%%", CFGF_NONE),
         CFG_STR("device", "default", CFGF_NONE),
         CFG_STR("mixer", "Master", CFGF_NONE),
         CFG_INT("mixer_idx", 0, CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
-        CFG_CUSTOM_COLOR_OPTS,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
-        CFG_END()};
-
-    cfg_opt_t read_opts[] = {
-        CFG_STR("format", "%content", CFGF_NONE),
-        CFG_STR("format_bad", "%title - %errno: %error", CFGF_NONE),
-        CFG_STR("path", NULL, CFGF_NONE),
-        CFG_INT("max_characters", 255, CFGF_NONE),
         CFG_CUSTOM_ALIGN_OPT,
         CFG_CUSTOM_COLOR_OPTS,
         CFG_CUSTOM_MIN_WIDTH_OPT,
@@ -464,16 +430,13 @@ int main(int argc, char *argv[]) {
         CFG_SEC("ethernet", ethernet_opts, CFGF_TITLE | CFGF_MULTI),
         CFG_SEC("battery", battery_opts, CFGF_TITLE | CFGF_MULTI),
         CFG_SEC("cpu_temperature", temp_opts, CFGF_TITLE | CFGF_MULTI),
-        CFG_SEC("disk", disk_opts, CFGF_TITLE | CFGF_MULTI),
         CFG_SEC("volume", volume_opts, CFGF_TITLE | CFGF_MULTI),
         CFG_SEC("ipv6", ipv6_opts, CFGF_NONE),
         CFG_SEC("time", time_opts, CFGF_NONE),
         CFG_SEC("tztime", tztime_opts, CFGF_TITLE | CFGF_MULTI),
-        CFG_SEC("ddate", ddate_opts, CFGF_NONE),
         CFG_SEC("load", load_opts, CFGF_NONE),
         CFG_SEC("memory", memory_opts, CFGF_NONE),
         CFG_SEC("cpu_usage", usage_opts, CFGF_NONE),
-        CFG_SEC("read_file", read_opts, CFGF_TITLE | CFGF_MULTI),
         CFG_END()};
 
     char *configfile = NULL;
@@ -595,11 +558,7 @@ int main(int argc, char *argv[]) {
     else
         die("Unknown markup format: \"%s\"\n", markup_str);
 
-#if YAJL_MAJOR >= 2
     yajl_gen json_gen = yajl_gen_alloc(NULL);
-#else
-    yajl_gen json_gen = yajl_gen_alloc(NULL, NULL);
-#endif
 
     if (output_format == O_I3BAR) {
         /* Initialize the i3bar protocol. See i3/docs/i3bar-protocol
@@ -784,24 +743,6 @@ int main(int argc, char *argv[]) {
                 SEC_CLOSE_MAP;
             }
 
-            CASE_SEC_TITLE("disk") {
-                SEC_OPEN_MAP("disk_info");
-                disk_info_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .path = title,
-                    .format = cfg_getstr(sec, "format"),
-                    .format_below_threshold = cfg_getstr(sec, "format_below_threshold"),
-                    .format_not_mounted = cfg_getstr(sec, "format_not_mounted"),
-                    .prefix_type = cfg_getstr(sec, "prefix_type"),
-                    .threshold_type = cfg_getstr(sec, "threshold_type"),
-                    .low_threshold = cfg_getfloat(sec, "low_threshold"),
-                };
-                print_disk_info(&ctx);
-                SEC_CLOSE_MAP;
-            }
-
             CASE_SEC("load") {
                 SEC_OPEN_MAP("load");
                 load_ctx_t ctx = {
@@ -870,19 +811,6 @@ int main(int argc, char *argv[]) {
                 SEC_CLOSE_MAP;
             }
 
-            CASE_SEC("ddate") {
-                SEC_OPEN_MAP("ddate");
-                ddate_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .format = cfg_getstr(sec, "format"),
-                    .t = tv.tv_sec,
-                };
-                print_ddate(&ctx);
-                SEC_CLOSE_MAP;
-            }
-
             CASE_SEC_TITLE("volume") {
                 SEC_OPEN_MAP("volume");
                 volume_ctx_t ctx = {
@@ -931,31 +859,11 @@ int main(int argc, char *argv[]) {
                 print_cpu_usage(&ctx);
                 SEC_CLOSE_MAP;
             }
-
-            CASE_SEC_TITLE("read_file") {
-                SEC_OPEN_MAP("read_file");
-                file_contents_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .title = title,
-                    .path = cfg_getstr(sec, "path"),
-                    .format = cfg_getstr(sec, "format"),
-                    .format_bad = cfg_getstr(sec, "format_bad"),
-                    .max_chars = cfg_getint(sec, "max_characters"),
-                };
-                print_file_contents(&ctx);
-                SEC_CLOSE_MAP;
-            }
         }
         if (output_format == O_I3BAR) {
             yajl_gen_array_close(json_gen);
             const unsigned char *buf;
-#if YAJL_MAJOR >= 2
             size_t len;
-#else
-            unsigned int len;
-#endif
             yajl_gen_get_buf(json_gen, &buf, &len);
             write(STDOUT_FILENO, buf, len);
             yajl_gen_clear(json_gen);
