@@ -19,13 +19,16 @@ backup=('etc/i3status.conf')
 options=('docs')
 
 build() {
-  cd $pkgname/meson
-  arch-meson -Dmans=true .. build
+  cd $startdir/i3status/meson
+  arch-meson \
+    -Dmans=true \
+    -Dc_args='-march=native -O2' \
+    .. build
   meson compile -C build
 }
 
 package() {
-  cd $pkgname/meson
+  cd $startdir/i3status/meson
   meson install -C build --destdir "$pkgdir"
   install -Dm644 -t "$pkgdir"/usr/share/licenses/$pkgname ../LICENSE
 }

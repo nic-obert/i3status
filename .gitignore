@@ -4,3 +4,5 @@ man/i3status.1
 /build
 i3status/build
 /pkg
+/src
+*.tar.zst

@@ -12,7 +12,7 @@ project(
     'warning_level=1',  # enable all warnings (-Wall)
     # TODO(https://github.com/i3/i3/issues/4087): switch to
     # TODO check for eventual memory leaks
-    'buildtype=debugoptimized',
+    #'buildtype=debugoptimized',
   ],
   meson_version: '>=0.53.0',
 )
