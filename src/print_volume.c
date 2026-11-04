@@ -1,4 +1,3 @@
-// vim:ts=4:sw=4:expandtab
 #include <config.h>
 #include <time.h>
 #include <string.h>
@@ -8,25 +7,9 @@
 #include <ctype.h>
 #include <yajl/yajl_gen.h>
 #include <yajl/yajl_version.h>
-
-#ifdef __linux__
 #include <alsa/asoundlib.h>
 #include <alloca.h>
 #include <math.h>
-#endif
-
-#if defined(__FreeBSD__) || defined(__DragonFly__)
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/soundcard.h>
-#endif
-
-#if defined(__NetBSD__) || defined(__OpenBSD__)
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/audioio.h>
-#include <sys/ioctl.h>
-#endif
 
 #include "i3status.h"
 #include "queue.h"
@@ -53,10 +36,10 @@
 static char *apply_volume_format(const char *fmt, int ivolume, const char *devicename) {
     char string_volume[STRING_SIZE];
 
-    snprintf(string_volume, STRING_SIZE, "%d%s", ivolume, pct_mark);
+    snprintf(string_volume, STRING_SIZE, "%d%s", ivolume, "%");
 
     placeholder_t placeholders[] = {
-        {.name = "%%", .value = pct_mark},
+        {.name = "%%", .value = "%"},
         {.name = "%volume", .value = string_volume},
         {.name = "%devicename", .value = devicename}};
 
@@ -76,7 +59,6 @@ void print_volume(volume_ctx_t *ctx) {
         free(instance);
     }
 
-#if HAS_PULSEAUDIO
     /* Try PulseAudio first */
 
     /* If the device name has the format "pulse[:N]" where N is the
@@ -138,9 +120,7 @@ void print_volume(volume_ctx_t *ctx) {
     }
 /* If some other device was specified or PulseAudio is not detected,
  * proceed to ALSA / OSS */
-#endif
 
-#ifdef __linux__
     const long MAX_LINEAR_DB_SCALE = 24;
     int err;
     snd_mixer_t *m;
@@ -241,120 +221,6 @@ void print_volume(volume_ctx_t *ctx) {
     snd_mixer_close(m);
     snd_mixer_selem_id_free(sid);
     goto out_with_format;
-
-#endif
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
-    char *mixerpath;
-    char defaultmixer[] = "/dev/mixer";
-    int mixfd, vol, devmask = 0;
-    const char *devicename = "UNSUPPORTED"; /* TODO: implement support for this */
-    pbval = 1;
-
-    if (ctx->mixer_idx > 0)
-        asprintf(&mixerpath, "/dev/mixer%d", ctx->mixer_idx);
-    else
-        mixerpath = defaultmixer;
-
-    if ((mixfd = open(mixerpath, O_RDWR)) < 0) {
-#if defined(__NetBSD__) || defined(__OpenBSD__)
-        warn("audioio: Cannot open mixer");
-#else
-        warn("OSS: Cannot open mixer");
-#endif
-        goto out;
-    }
-
-    if (ctx->mixer_idx > 0)
-        free(mixerpath);
-
-#if defined(__NetBSD__) || defined(__OpenBSD__)
-    int oclass_idx = -1, master_idx = -1, master_mute_idx = -1;
-    int master_next = AUDIO_MIXER_LAST;
-    mixer_devinfo_t devinfo, devinfo2;
-    mixer_ctrl_t vinfo;
-
-    devinfo.index = 0;
-    while (ioctl(mixfd, AUDIO_MIXER_DEVINFO, &devinfo) >= 0) {
-        if (devinfo.type != AUDIO_MIXER_CLASS) {
-            devinfo.index++;
-            continue;
-        }
-        if (strncmp(devinfo.label.name, AudioCoutputs, MAX_AUDIO_DEV_LEN) == 0)
-            oclass_idx = devinfo.index;
-
-        devinfo.index++;
-    }
-
-    devinfo2.index = 0;
-    while (ioctl(mixfd, AUDIO_MIXER_DEVINFO, &devinfo2) >= 0) {
-        if ((devinfo2.type == AUDIO_MIXER_VALUE) && (devinfo2.mixer_class == oclass_idx) && (strncmp(devinfo2.label.name, AudioNmaster, MAX_AUDIO_DEV_LEN) == 0)) {
-            master_idx = devinfo2.index;
-            master_next = devinfo2.next;
-        }
-
-        if ((devinfo2.type == AUDIO_MIXER_ENUM) && (devinfo2.mixer_class == oclass_idx) && (strncmp(devinfo2.label.name, AudioNmute, MAX_AUDIO_DEV_LEN) == 0))
-            if (master_next == devinfo2.index)
-                master_mute_idx = devinfo2.index;
-
-        if (master_next != AUDIO_MIXER_LAST)
-            master_next = devinfo2.next;
-        devinfo2.index++;
-    }
-
-    if (master_idx == -1)
-        goto out;
-
-    devinfo.index = master_idx;
-    if (ioctl(mixfd, AUDIO_MIXER_DEVINFO, &devinfo) == -1)
-        goto out;
-
-    vinfo.dev = master_idx;
-    vinfo.type = AUDIO_MIXER_VALUE;
-    vinfo.un.value.num_channels = devinfo.un.v.num_channels;
-    if (ioctl(mixfd, AUDIO_MIXER_READ, &vinfo) == -1)
-        goto out;
-
-    if (AUDIO_MAX_GAIN != 100) {
-        float avgf = ((float)vinfo.un.value.level[AUDIO_MIXER_LEVEL_MONO] / AUDIO_MAX_GAIN) * 100;
-        vol = (int)avgf;
-        vol = (avgf - vol < 0.5 ? vol : (vol + 1));
-    } else {
-        vol = (int)vinfo.un.value.level[AUDIO_MIXER_LEVEL_MONO];
-    }
-
-    if (master_mute_idx != -1) {
-        vinfo.dev = master_mute_idx;
-        vinfo.type = AUDIO_MIXER_ENUM;
-        if (ioctl(mixfd, AUDIO_MIXER_READ, &vinfo) == -1)
-            goto out;
-
-        if (vinfo.un.ord) {
-            START_COLOR("color_degraded");
-            ctx->fmt = ctx->fmt_muted;
-            pbval = 0;
-        }
-    }
-
-#else
-    if (ioctl(mixfd, SOUND_MIXER_READ_DEVMASK, &devmask) == -1) {
-        warn("OSS: Cannot read mixer information");
-        goto out;
-    }
-    if (ioctl(mixfd, MIXER_READ(0), &vol) == -1) {
-        warn("OSS: Cannot read mixer information");
-        goto out;
-    }
-
-    if (((vol & 0x7f) == 0) && (((vol >> 8) & 0x7f) == 0)) {
-        START_COLOR("color_degraded");
-        pbval = 0;
-    }
-
-#endif
-    ctx->buf = apply_volume_format(ctx->fmt, vol & 0x7f, devicename);
-    close(mixfd);
-    goto out_with_format;
-#endif
 
 out:
     if (!pbval)

@@ -1,6 +1,3 @@
-// vim:ts=4:sw=4:expandtab
-#include <config.h>
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,37 +9,8 @@
 
 #define STRING_SIZE 128
 
-#if defined(__linux__)
-#include <errno.h>
 #include <glob.h>
 #include <sys/types.h>
-#endif
-
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
-#include <dev/acpica/acpiio.h>
-#include <sys/sysctl.h>
-#include <sys/types.h>
-#endif
-
-#if defined(__DragonFly__)
-#include <sys/fcntl.h>
-#endif
-
-#if defined(__OpenBSD__)
-#include <machine/apmvar.h>
-#include <sys/fcntl.h>
-#include <sys/ioctl.h>
-#include <sys/types.h>
-#include <sys/sysctl.h>
-#include <sys/sensors.h>
-#include <sys/sysctl.h>
-#endif
-
-#if defined(__NetBSD__)
-#include <fcntl.h>
-#include <prop/proplib.h>
-#include <sys/envsys.h>
-#endif
 
 typedef enum {
     CS_UNKNOWN,
@@ -66,23 +34,6 @@ struct battery_info {
     charging_status_t status;
 };
 
-#if defined(__DragonFly__)
-#define ACPIDEV "/dev/acpi"
-static int acpifd;
-
-static bool acpi_init(void) {
-    if (acpifd == 0) {
-        acpifd = open(ACPIDEV, O_RDWR);
-        if (acpifd == -1)
-            acpifd = open(ACPIDEV, O_RDONLY);
-        if (acpifd == -1)
-            return false;
-    }
-    return true;
-}
-#endif
-
-#if defined(__linux__) || defined(__NetBSD__)
 /*
  * Add batt_info data to acc.
  */
@@ -141,12 +92,10 @@ static void add_battery_info(struct battery_info *acc, const struct battery_info
 
     acc->present_rate = abs(present_rate);
 }
-#endif
 
 static bool slurp_battery_info(battery_info_ctx_t *ctx, struct battery_info *batt_info, yajl_gen json_gen, char *buffer, int number, const char *path, const char *format_down) {
     char *outwalk = buffer;
 
-#if defined(__linux__)
     char buf[1024];
     const char *walk, *last;
     bool watt_as_unit = false;
@@ -232,297 +181,6 @@ static bool slurp_battery_info(battery_info_ctx_t *ctx, struct battery_info *bat
             batt_info->full_last = (((float)voltage / 1000.0) * ((float)batt_info->full_last / 1000.0));
         }
     }
-#elif defined(__DragonFly__)
-    union acpi_battery_ioctl_arg battio;
-    if (acpi_init()) {
-        battio.unit = number;
-        ioctl(acpifd, ACPIIO_BATT_GET_BIF, &battio);
-        batt_info->full_design = battio.bif.dcap;
-        batt_info->full_last = battio.bif.lfcap;
-        battio.unit = number;
-        ioctl(acpifd, ACPIIO_BATT_GET_BATTINFO, &battio);
-        batt_info->percentage_remaining = battio.battinfo.cap;
-        batt_info->present_rate = battio.battinfo.rate;
-        batt_info->seconds_remaining = battio.battinfo.min * 60;
-        switch (battio.battinfo.state) {
-            case 0:
-                batt_info->status = CS_FULL;
-                break;
-            case ACPI_BATT_STAT_CHARGING:
-                batt_info->status = CS_CHARGING;
-                break;
-            case ACPI_BATT_STAT_DISCHARG:
-                batt_info->status = CS_DISCHARGING;
-                break;
-            default:
-                batt_info->status = CS_UNKNOWN;
-        }
-        OUTPUT_FULL_TEXT(format_down);
-    }
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
-    int state;
-    int sysctl_rslt;
-    size_t sysctl_size = sizeof(sysctl_rslt);
-
-    if (sysctlbyname(BATT_LIFE, &sysctl_rslt, &sysctl_size, NULL, 0) != 0) {
-        OUTPUT_FULL_TEXT(format_down);
-        return false;
-    }
-
-    batt_info->percentage_remaining = sysctl_rslt;
-    if (sysctlbyname(BATT_TIME, &sysctl_rslt, &sysctl_size, NULL, 0) != 0) {
-        OUTPUT_FULL_TEXT(format_down);
-        return false;
-    }
-
-    batt_info->seconds_remaining = sysctl_rslt * 60;
-    if (sysctlbyname(BATT_STATE, &sysctl_rslt, &sysctl_size, NULL, 0) != 0) {
-        OUTPUT_FULL_TEXT(format_down);
-        return false;
-    }
-
-    state = sysctl_rslt;
-    if (state == 0 && batt_info->percentage_remaining == 100)
-        batt_info->status = CS_FULL;
-    else if ((state & ACPI_BATT_STAT_CHARGING) && batt_info->percentage_remaining < 100)
-        batt_info->status = CS_CHARGING;
-    else
-        batt_info->status = CS_DISCHARGING;
-#elif defined(__OpenBSD__)
-    /*
-	 * We're using apm(4) here, which is the interface to acpi(4) on amd64/i386 and
-	 * the generic interface on macppc/sparc64/zaurus.  Machines that have ACPI
-	 * battery sensors gain some extra information.
-	 */
-    struct apm_power_info apm_info;
-    struct sensordev sensordev;
-    struct sensor sensor;
-    size_t sdlen, slen;
-    int apm_fd;
-    int dev, mib[5] = {CTL_HW, HW_SENSORS, 0, 0, 0};
-    int volts = 0;
-
-    apm_fd = open("/dev/apm", O_RDONLY);
-    if (apm_fd < 0) {
-        OUTPUT_FULL_TEXT("can't open /dev/apm");
-        return false;
-    }
-    if (ioctl(apm_fd, APM_IOC_GETPOWER, &apm_info) < 0)
-        OUTPUT_FULL_TEXT("can't read power info");
-
-    close(apm_fd);
-
-    /* Don't bother to go further if there's no battery present. */
-    if ((apm_info.battery_state == APM_BATTERY_ABSENT) ||
-        (apm_info.battery_state == APM_BATT_UNKNOWN)) {
-        OUTPUT_FULL_TEXT(format_down);
-        return false;
-    }
-
-    switch (apm_info.ac_state) {
-        case APM_AC_OFF:
-            batt_info->status = CS_DISCHARGING;
-            break;
-        case APM_AC_ON:
-            batt_info->status = CS_CHARGING;
-            break;
-        default:
-            /* If we don't know what's going on, just assume we're discharging. */
-            batt_info->status = CS_DISCHARGING;
-            break;
-    }
-
-    batt_info->percentage_remaining = apm_info.battery_life;
-
-    /* Can't give a meaningful value for remaining minutes if we're charging. */
-    if (batt_info->status != CS_CHARGING) {
-        batt_info->seconds_remaining = apm_info.minutes_left * 60;
-    }
-
-    /* If acpibat* are present, check sensors for data not present via APM. */
-    batt_info->present_rate = 0;
-    sdlen = sizeof(sensordev);
-    slen = sizeof(sensor);
-
-    for (dev = 0;; dev++) {
-        mib[2] = dev;
-        if (sysctl(mib, 3, &sensordev, &sdlen, NULL, 0) == -1) {
-            break;
-        }
-        /* 'path' is the node within the full path */
-        if (BEGINS_WITH(sensordev.xname, "acpibat")) {
-            /* power0 */
-            mib[3] = SENSOR_WATTS;
-            mib[4] = 0;
-            if (sysctl(mib, 5, &sensor, &slen, NULL, 0) == -1) {
-                /* try current0 */
-                mib[3] = SENSOR_AMPS;
-                if (sysctl(mib, 5, &sensor, &slen, NULL, 0) == -1)
-                    continue;
-                volts = sensor.value;
-
-                /* we also need current voltage to convert amps to watts */
-                mib[3] = SENSOR_VOLTS_DC;
-                mib[4] = 1;
-                if (sysctl(mib, 5, &sensor, &slen, NULL, 0) == -1)
-                    continue;
-
-                batt_info->present_rate += (((float)volts / 1000.0) * ((float)sensor.value / 1000.0));
-            } else {
-                batt_info->present_rate += sensor.value;
-            }
-        }
-    }
-#elif defined(__NetBSD__)
-    /*
-     * Using envsys(4) via sysmon(4).
-     */
-    int fd, rval;
-    bool is_found = false;
-    char sensor_desc[16];
-
-    prop_dictionary_t dict;
-    prop_array_t array;
-    prop_object_iterator_t iter;
-    prop_object_iterator_t iter2;
-    prop_object_t obj, obj2, obj3, obj4, obj5;
-
-    if (number >= 0)
-        (void)snprintf(sensor_desc, sizeof(sensor_desc), "acpibat%d", number);
-
-    fd = open("/dev/sysmon", O_RDONLY);
-    if (fd < 0) {
-        OUTPUT_FULL_TEXT("can't open /dev/sysmon");
-        return false;
-    }
-
-    rval = prop_dictionary_recv_ioctl(fd, ENVSYS_GETDICTIONARY, &dict);
-    if (rval == -1) {
-        close(fd);
-        return false;
-    }
-
-    if (prop_dictionary_count(dict) == 0) {
-        prop_object_release(dict);
-        close(fd);
-        return false;
-    }
-
-    iter = prop_dictionary_iterator(dict);
-    if (iter == NULL) {
-        prop_object_release(dict);
-        close(fd);
-    }
-
-    /* iterate over the dictionary returned by the kernel */
-    while ((obj = prop_object_iterator_next(iter)) != NULL) {
-        /* skip this dict if it's not what we're looking for */
-        if (number < 0) {
-            /* we want all batteries */
-            if (!BEGINS_WITH(prop_dictionary_keysym_cstring_nocopy(obj),
-                             "acpibat"))
-                continue;
-        } else {
-            /* we want a specific battery */
-            if (strcmp(sensor_desc,
-                       prop_dictionary_keysym_cstring_nocopy(obj)) != 0)
-                continue;
-        }
-
-        is_found = true;
-
-        array = prop_dictionary_get_keysym(dict, obj);
-        if (prop_object_type(array) != PROP_TYPE_ARRAY) {
-            prop_object_iterator_release(iter);
-            prop_object_release(dict);
-            close(fd);
-            return false;
-        }
-
-        iter2 = prop_array_iterator(array);
-        if (!iter2) {
-            prop_object_iterator_release(iter);
-            prop_object_release(dict);
-            close(fd);
-            return false;
-        }
-
-        struct battery_info batt_buf = {
-            .full_design = 0,
-            .full_last = 0,
-            .remaining = 0,
-            .present_rate = 0,
-            .status = CS_UNKNOWN,
-        };
-        int voltage = -1;
-        bool watt_as_unit = false;
-
-        /* iterate over array of dicts specific to target battery */
-        while ((obj2 = prop_object_iterator_next(iter2)) != NULL) {
-            obj3 = prop_dictionary_get(obj2, "description");
-
-            if (obj3 == NULL)
-                continue;
-
-            if (strcmp("charging", prop_string_cstring_nocopy(obj3)) == 0) {
-                obj3 = prop_dictionary_get(obj2, "cur-value");
-
-                if (prop_number_integer_value(obj3))
-                    batt_buf.status = CS_CHARGING;
-                else
-                    batt_buf.status = CS_DISCHARGING;
-            } else if (strcmp("charge", prop_string_cstring_nocopy(obj3)) == 0) {
-                obj3 = prop_dictionary_get(obj2, "cur-value");
-                obj4 = prop_dictionary_get(obj2, "max-value");
-                obj5 = prop_dictionary_get(obj2, "type");
-
-                batt_buf.remaining = prop_number_integer_value(obj3);
-                batt_buf.full_design = prop_number_integer_value(obj4);
-
-                if (strcmp("Ampere hour", prop_string_cstring_nocopy(obj5)) == 0)
-                    watt_as_unit = false;
-                else
-                    watt_as_unit = true;
-            } else if (strcmp("discharge rate", prop_string_cstring_nocopy(obj3)) == 0) {
-                obj3 = prop_dictionary_get(obj2, "cur-value");
-                batt_buf.present_rate = prop_number_integer_value(obj3);
-            } else if (strcmp("charge rate", prop_string_cstring_nocopy(obj3)) == 0) {
-                obj3 = prop_dictionary_get(obj2, "cur-value");
-                batt_info->present_rate = prop_number_integer_value(obj3);
-            } else if (strcmp("last full cap", prop_string_cstring_nocopy(obj3)) == 0) {
-                obj3 = prop_dictionary_get(obj2, "cur-value");
-                batt_buf.full_last = prop_number_integer_value(obj3);
-            } else if (strcmp("voltage", prop_string_cstring_nocopy(obj3)) == 0) {
-                obj3 = prop_dictionary_get(obj2, "cur-value");
-                voltage = prop_number_integer_value(obj3);
-            }
-        }
-        prop_object_iterator_release(iter2);
-
-        if (!watt_as_unit && voltage != -1) {
-            batt_buf.present_rate = (((float)voltage / 1000.0) * ((float)batt_buf.present_rate / 1000.0));
-            batt_buf.remaining = (((float)voltage / 1000.0) * ((float)batt_buf.remaining / 1000.0));
-            batt_buf.full_design = (((float)voltage / 1000.0) * ((float)batt_buf.full_design / 1000.0));
-            batt_buf.full_last = (((float)voltage / 1000.0) * ((float)batt_buf.full_last / 1000.0));
-        }
-
-        if (batt_buf.remaining == batt_buf.full_design)
-            batt_buf.status = CS_FULL;
-
-        add_battery_info(batt_info, &batt_buf);
-    }
-
-    prop_object_iterator_release(iter);
-    prop_object_release(dict);
-    close(fd);
-
-    if (!is_found) {
-        OUTPUT_FULL_TEXT(format_down);
-        return false;
-    }
-
-    batt_info->present_rate = abs(batt_info->present_rate);
-#endif
 
     return true;
 }
@@ -532,7 +190,6 @@ static bool slurp_battery_info(battery_info_ctx_t *ctx, struct battery_info *bat
  * Returns false on error, and an error message will have been written.
  */
 static bool slurp_all_batteries(battery_info_ctx_t *ctx, struct battery_info *batt_info, yajl_gen json_gen, char *buffer, const char *path, const char *format_down) {
-#if defined(__linux__)
     char *outwalk = buffer;
     bool is_found = false;
 
@@ -579,12 +236,6 @@ static bool slurp_all_batteries(battery_info_ctx_t *ctx, struct battery_info *ba
     }
 
     batt_info->present_rate = abs(batt_info->present_rate);
-#else
-    /* FreeBSD and OpenBSD only report aggregates. NetBSD always
-     * iterates through all batteries, so it's more efficient to
-     * aggregate in slurp_battery_info. */
-    return slurp_battery_info(ctx, batt_info, json_gen, buffer, -1, path, format_down);
-#endif
 
     return true;
 }
@@ -601,17 +252,6 @@ void print_battery_info(battery_info_ctx_t *ctx) {
         .status = CS_UNKNOWN,
     };
     bool colorful_output = false;
-
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__) || defined(__OpenBSD__)
-    /* These OSes report battery stats in whole percent. */
-    if (strcmp("%.02f%s", ctx->format_percentage) == 0) {
-        ctx->format_percentage = "%.00f%s";
-    }
-#endif
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__) || defined(__OpenBSD__)
-    /* These OSes report battery time in minutes. */
-    ctx->hide_seconds = true;
-#endif
 
     if (ctx->number < 0) {
         if (!slurp_all_batteries(ctx, &batt_info, ctx->json_gen, ctx->buf, ctx->path, ctx->format_down))
@@ -696,7 +336,7 @@ void print_battery_info(battery_info_ctx_t *ctx) {
             statusstr = ctx->status_unk;
     }
     snprintf(string_status, STRING_SIZE, "%s", statusstr);
-    snprintf(string_percentage, STRING_SIZE, ctx->format_percentage, batt_info.percentage_remaining, pct_mark);
+    snprintf(string_percentage, STRING_SIZE, ctx->format_percentage, batt_info.percentage_remaining, "%");
 
     if (batt_info.seconds_remaining >= 0) {
         int seconds, hours, minutes;

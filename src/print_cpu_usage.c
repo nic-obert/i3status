@@ -1,8 +1,5 @@
-// vim:ts=4:sw=4:expandtab
 #include <config.h>
-#if defined(__linux__)
 #include <sys/sysinfo.h>
-#endif
 #include <stdlib.h>
 #include <limits.h>
 #include <stdio.h>
@@ -11,55 +8,17 @@
 #include <yajl/yajl_version.h>
 #include <errno.h>
 
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
-#include <sys/param.h>
-#include <sys/types.h>
-#include <sys/sysctl.h>
-#if defined(__OpenBSD__)
-#include <sys/sched.h>
-#else
-#include <sys/dkstat.h>
-#endif
-#endif
-
-#if defined(__DragonFly__)
-#include <sys/param.h>
-#include <sys/types.h>
-#include <sys/sysctl.h>
-#include <sys/resource.h>
-#endif
-
-#if defined(__NetBSD__)
-#include <sys/param.h>
-#include <sys/resource.h>
-#include <sys/sysctl.h>
-#include <sys/sched.h>
-#endif
-
 #include "i3status.h"
 
 struct cpu_usage {
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
-    long user;
-    long nice;
-    long system;
-    long idle;
-    long total;
-#else
     int user;
     int nice;
     int system;
     int idle;
-#if defined(__OpenBSD__)
-    int spin;
-#endif
     int total;
-#endif
 };
 
-#if defined(__linux__)
 static int cpu_count = 0;
-#endif
 static struct cpu_usage prev_all = {0, 0, 0, 0, 0};
 static struct cpu_usage *prev_cpus = NULL;
 static struct cpu_usage *curr_cpus = NULL;
@@ -74,15 +33,9 @@ void print_cpu_usage(cpu_usage_ctx_t *ctx) {
     const char *walk;
     char *outwalk = ctx->buf;
     struct cpu_usage curr_all = {0, 0, 0, 0, 0};
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
-    long diff_idle, diff_total;
-#else
     int diff_idle, diff_total;
-#endif
     int diff_usage;
     bool colorful_output = false;
-
-#if defined(__linux__)
 
     // Detecting if CPU count has changed
     int curr_cpu_count = get_nprocs_conf();
@@ -142,47 +95,6 @@ void print_cpu_usage(cpu_usage_ctx_t *ctx) {
     diff_total = curr_all.total - prev_all.total;
     diff_usage = (diff_total ? (1000 * (diff_total - diff_idle) / diff_total + 5) / 10 : 0);
     prev_all = curr_all;
-#elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
-
-#if defined(__FreeBSD__) || defined(__DragonFly__) || defined(__NetBSD__)
-    size_t size;
-    long cp_time[CPUSTATES];
-    size = sizeof cp_time;
-    if (sysctlbyname("kern.cp_time", &cp_time, &size, NULL, 0) < 0)
-        goto error;
-#else
-    /* This information is taken from the boot cpu, any other cpus are currently ignored. */
-    long cp_time[CPUSTATES];
-    int mib[2];
-    size_t size = sizeof(cp_time);
-
-    mib[0] = CTL_KERN;
-    mib[1] = KERN_CPTIME;
-
-    if (sysctl(mib, 2, cp_time, &size, NULL, 0))
-        goto error;
-#endif
-
-    curr_all.user = cp_time[CP_USER];
-    curr_all.nice = cp_time[CP_NICE];
-    curr_all.system = cp_time[CP_SYS];
-#if defined(__DragonFly__)
-    curr_all.system += cp_time[CP_INTR];
-#endif
-    curr_all.idle = cp_time[CP_IDLE];
-#if defined(__OpenBSD__)
-    curr_all.spin = cp_time[CP_SPIN];
-    curr_all.total = curr_all.user + curr_all.nice + curr_all.system + curr_all.idle + curr_all.spin;
-#else
-    curr_all.total = curr_all.user + curr_all.nice + curr_all.system + curr_all.idle;
-#endif
-    diff_idle = curr_all.idle - prev_all.idle;
-    diff_total = curr_all.total - prev_all.total;
-    diff_usage = (diff_total ? (1000 * (diff_total - diff_idle) / diff_total + 5) / 10 : 0);
-    prev_all = curr_all;
-#else
-    goto error;
-#endif
 
     if (diff_usage >= ctx->max_threshold) {
         START_COLOR("color_bad");
@@ -201,10 +113,9 @@ void print_cpu_usage(cpu_usage_ctx_t *ctx) {
             *(outwalk++) = *walk;
 
         } else if (BEGINS_WITH(walk + 1, "usage")) {
-            outwalk += sprintf(outwalk, "%02d%s", diff_usage, pct_mark);
+            outwalk += sprintf(outwalk, "%02d%s", diff_usage, "%");
             walk += strlen("usage");
         }
-#if defined(__linux__)
         else if (BEGINS_WITH(walk + 1, "cpu")) {
             int number = -1;
             int length = strlen("cpu");
@@ -217,11 +128,10 @@ void print_cpu_usage(cpu_usage_ctx_t *ctx) {
                 int cpu_diff_idle = curr_cpus[number].idle - prev_cpus[number].idle;
                 int cpu_diff_total = curr_cpus[number].total - prev_cpus[number].total;
                 int cpu_diff_usage = (cpu_diff_total ? (1000 * (cpu_diff_total - cpu_diff_idle) / cpu_diff_total + 5) / 10 : 0);
-                outwalk += sprintf(outwalk, "%02d%s", cpu_diff_usage, pct_mark);
+                outwalk += sprintf(outwalk, "%02d%s", cpu_diff_usage, "%");
             }
             walk += length;
         }
-#endif
         else {
             *(outwalk++) = '%';
         }

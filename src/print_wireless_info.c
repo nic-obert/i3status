@@ -7,7 +7,6 @@
 #include <yajl/yajl_version.h>
 #include <sys/socket.h>
 
-#ifdef __linux__
 #include <errno.h>
 #include <net/if.h>
 #include <netlink/netlink.h>
@@ -16,55 +15,6 @@
 #include <linux/nl80211.h>
 #include <linux/if_ether.h>
 #define IW_ESSID_MAX_SIZE 32
-#endif
-
-#ifdef __APPLE__
-#define IW_ESSID_MAX_SIZE 32
-#endif
-
-#ifdef __FreeBSD__
-#include <sys/param.h>
-#include <sys/ioctl.h>
-#include <ifaddrs.h>
-#include <net/if.h>
-#include <net/if_media.h>
-#include <net80211/ieee80211.h>
-#include <net80211/ieee80211_ioctl.h>
-#include <unistd.h>
-#define IW_ESSID_MAX_SIZE IEEE80211_NWID_LEN
-#endif
-
-#ifdef __DragonFly__
-#include <sys/param.h>
-#include <sys/ioctl.h>
-#include <ifaddrs.h>
-#include <stdlib.h>
-#include <net/if.h>
-#include <net/if_media.h>
-#include <netproto/802_11/ieee80211.h>
-#include <netproto/802_11/ieee80211_ioctl.h>
-#include <unistd.h>
-#define IW_ESSID_MAX_SIZE IEEE80211_NWID_LEN
-#endif
-
-#ifdef __OpenBSD__
-#include <sys/ioctl.h>
-#include <net/if.h>
-#include <sys/select.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <netinet/if_ether.h>
-#include <net80211/ieee80211.h>
-#include <net80211/ieee80211_ioctl.h>
-#define IW_ESSID_MAX_SIZE IEEE80211_NWID_LEN
-#endif
-
-#ifdef __NetBSD__
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <net80211/ieee80211.h>
-#define IW_ESSID_MAX_SIZE IEEE80211_NWID_LEN
-#endif
 
 #include "i3status.h"
 
@@ -97,7 +47,6 @@ typedef struct {
     double frequency;
 } wireless_info_t;
 
-#if defined(__linux__) || defined(__FreeBSD__)
 // Like iw_print_bitrate, but without the dependency on libiw.
 static void print_bitrate(char *buffer, int buflen, long int bitrate, const char *format_bitrate) {
     const int kilo = 1e3;
@@ -120,9 +69,7 @@ static void print_bitrate(char *buffer, int buflen, long int bitrate, const char
     }
     snprintf(buffer, buflen, format_bitrate, rate / divisor, scale);
 }
-#endif
 
-#ifdef __linux__
 // Based on NetworkManager/src/platform/wifi/wifi-utils-nl80211.c
 static uint32_t nl80211_xbm_to_percent(int32_t xbm, int32_t divisor) {
 #define NOISE_FLOOR_DBM -90
@@ -284,12 +231,10 @@ static int gwi_scan_cb(struct nl_msg *msg, void *data) {
 
     return NL_SKIP;
 }
-#endif
 
 static int get_wireless_info(const char *interface, wireless_info_t *info) {
     memset(info, 0, sizeof(wireless_info_t));
 
-#ifdef __linux__
     struct nl_sock *sk = nl_socket_alloc();
     if (genl_connect(sk) != 0)
         goto error1;
@@ -339,159 +284,6 @@ error2:
     nlmsg_free(msg);
 error1:
     nl_socket_free(sk);
-    return 0;
-
-#endif
-#if defined(__FreeBSD__) || defined(__DragonFly__)
-    int s, inwid;
-    union {
-        struct ieee80211req_sta_req req;
-        uint8_t buf[24 * 1024];
-    } u;
-    struct ieee80211req na;
-    char bssid[IEEE80211_ADDR_LEN];
-    size_t len;
-
-    if ((s = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-        return (0);
-
-    memset(&na, 0, sizeof(na));
-    strlcpy(na.i_name, interface, sizeof(na.i_name));
-    na.i_type = IEEE80211_IOC_SSID;
-    na.i_data = &info->essid[0];
-    na.i_len = IEEE80211_NWID_LEN + 1;
-    if ((inwid = ioctl(s, SIOCG80211, (caddr_t)&na)) == -1) {
-        close(s);
-        return (0);
-    }
-    if (inwid == 0) {
-        if (na.i_len <= IEEE80211_NWID_LEN)
-            len = na.i_len + 1;
-        else
-            len = IEEE80211_NWID_LEN + 1;
-        info->essid[len - 1] = '\0';
-    } else {
-        close(s);
-        return (0);
-    }
-    info->flags |= WIRELESS_INFO_FLAG_HAS_ESSID;
-
-    memset(&na, 0, sizeof(na));
-    strlcpy(na.i_name, interface, sizeof(na.i_name));
-    na.i_type = IEEE80211_IOC_BSSID;
-    na.i_data = bssid;
-    na.i_len = sizeof(bssid);
-
-    if (ioctl(s, SIOCG80211, (caddr_t)&na) == -1) {
-        close(s);
-        return (0);
-    }
-
-    memcpy(u.req.is_u.macaddr, bssid, sizeof(bssid));
-    memset(&na, 0, sizeof(na));
-    strlcpy(na.i_name, interface, sizeof(na.i_name));
-    na.i_type = IEEE80211_IOC_STA_INFO;
-    na.i_data = &u;
-    na.i_len = sizeof(u);
-
-    if (ioctl(s, SIOCG80211, (caddr_t)&na) == -1) {
-        close(s);
-        return (0);
-    }
-
-    close(s);
-    if (na.i_len >= sizeof(u.req)) {
-        /*
-         * Just use the first BSSID returned even if there are
-         * multiple APs sharing the same BSSID.
-         */
-        info->signal_level = u.req.info[0].isi_rssi / 2 +
-                             u.req.info[0].isi_noise;
-        info->flags |= WIRELESS_INFO_FLAG_HAS_SIGNAL;
-        info->noise_level = u.req.info[0].isi_noise;
-        info->flags |= WIRELESS_INFO_FLAG_HAS_NOISE;
-        // isi_txmbps is specified in units of 500 Kbit/s
-        // Convert them to bit/s
-        info->bitrate = (long int)u.req.info[0].isi_txmbps * 500 * 1000;
-    }
-
-    return 1;
-#endif
-#ifdef __OpenBSD__
-    struct ifreq ifr;
-    struct ieee80211_bssid bssid;
-    struct ieee80211_nwid nwid;
-    struct ieee80211_nodereq nr;
-
-    struct ether_addr ea;
-
-    int s, len, ibssid, inwid;
-    u_int8_t zero_bssid[IEEE80211_ADDR_LEN];
-
-    if ((s = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-        return (0);
-
-    memset(&ifr, 0, sizeof(ifr));
-    ifr.ifr_data = (caddr_t)&nwid;
-    (void)strlcpy(ifr.ifr_name, interface, sizeof(ifr.ifr_name));
-    inwid = ioctl(s, SIOCG80211NWID, (caddr_t)&ifr);
-
-    memset(&bssid, 0, sizeof(bssid));
-    strlcpy(bssid.i_name, interface, sizeof(bssid.i_name));
-    ibssid = ioctl(s, SIOCG80211BSSID, &bssid);
-
-    if (ibssid != 0 || inwid != 0) {
-        close(s);
-        return 0;
-    }
-
-    /* NWID */
-    {
-        if (nwid.i_len <= IEEE80211_NWID_LEN)
-            len = nwid.i_len + 1;
-        else
-            len = IEEE80211_NWID_LEN + 1;
-
-        strncpy(&info->essid[0], (char *)nwid.i_nwid, len);
-        info->essid[IW_ESSID_MAX_SIZE] = '\0';
-        info->flags |= WIRELESS_INFO_FLAG_HAS_ESSID;
-    }
-
-    /* Signal strength */
-    {
-        memset(&zero_bssid, 0, sizeof(zero_bssid));
-        if (ibssid == 0 && memcmp(bssid.i_bssid, zero_bssid, IEEE80211_ADDR_LEN) != 0) {
-            memcpy(&ea.ether_addr_octet, bssid.i_bssid, sizeof(ea.ether_addr_octet));
-
-            bzero(&nr, sizeof(nr));
-            bcopy(bssid.i_bssid, &nr.nr_macaddr, sizeof(nr.nr_macaddr));
-            strlcpy(nr.nr_ifname, interface, sizeof(nr.nr_ifname));
-
-            if (ioctl(s, SIOCG80211NODE, &nr) == 0 && nr.nr_rssi) {
-                info->signal_level = nr.nr_rssi;
-                if (nr.nr_max_rssi) {
-                    info->signal_level_max = nr.nr_max_rssi;
-                    info->quality = IEEE80211_NODEREQ_RSSI(&nr);
-                } else {
-                    if (info->signal_level <= -100)
-                        info->quality = 0;
-                    else if (info->signal_level > -50)
-                        info->quality = 100;
-                    else
-                        info->quality = abs(2 * (info->signal_level + 100));
-                }
-                info->quality_max = 100;
-                info->quality_average = 50;
-
-                info->flags |= WIRELESS_INFO_FLAG_HAS_QUALITY;
-                info->flags |= WIRELESS_INFO_FLAG_HAS_SIGNAL;
-            }
-        }
-    }
-
-    close(s);
-    return 1;
-#endif
     return 0;
 }
 
@@ -576,7 +368,7 @@ void print_wireless_info(wireless_info_ctx_t *ctx) {
 
     if (info.flags & WIRELESS_INFO_FLAG_HAS_QUALITY) {
         if (info.quality_max)
-            snprintf(string_quality, STRING_SIZE, ctx->format_quality, PERCENT_VALUE(info.quality, info.quality_max), pct_mark);
+            snprintf(string_quality, STRING_SIZE, ctx->format_quality, PERCENT_VALUE(info.quality, info.quality_max), "%");
         else
             snprintf(string_quality, STRING_SIZE, "%d", info.quality);
     } else {
@@ -585,7 +377,7 @@ void print_wireless_info(wireless_info_ctx_t *ctx) {
 
     if (info.flags & WIRELESS_INFO_FLAG_HAS_SIGNAL) {
         if (info.signal_level_max)
-            snprintf(string_signal, STRING_SIZE, ctx->format_signal, PERCENT_VALUE(info.signal_level, info.signal_level_max), pct_mark);
+            snprintf(string_signal, STRING_SIZE, ctx->format_signal, PERCENT_VALUE(info.signal_level, info.signal_level_max), "%");
         else
             snprintf(string_signal, STRING_SIZE, "%d dBm", info.signal_level);
     } else {
@@ -594,7 +386,7 @@ void print_wireless_info(wireless_info_ctx_t *ctx) {
 
     if (info.flags & WIRELESS_INFO_FLAG_HAS_NOISE) {
         if (info.noise_level_max)
-            snprintf(string_noise, STRING_SIZE, ctx->format_noise, PERCENT_VALUE(info.noise_level, info.noise_level_max), pct_mark);
+            snprintf(string_noise, STRING_SIZE, ctx->format_noise, PERCENT_VALUE(info.noise_level, info.noise_level_max), "%");
         else
             snprintf(string_noise, STRING_SIZE, "%d dBm", info.noise_level);
     } else {
@@ -615,9 +407,7 @@ void print_wireless_info(wireless_info_ctx_t *ctx) {
 
     snprintf(string_ip, STRING_SIZE, "%s", ip_address);
 
-#if defined(__linux__) || defined(__FreeBSD__)
     print_bitrate(string_bitrate, sizeof(string_bitrate), info.bitrate, ctx->format_bitrate);
-#endif
 
     placeholder_t placeholders[] = {
         {.name = "%quality", .value = string_quality},

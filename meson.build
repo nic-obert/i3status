@@ -11,7 +11,8 @@ project(
     'c_std=c11',
     'warning_level=1',  # enable all warnings (-Wall)
     # TODO(https://github.com/i3/i3/issues/4087): switch to
-    # 'buildtype=debugoptimized',
+    # TODO check for eventual memory leaks
+    'buildtype=debugoptimized',
   ],
   meson_version: '>=0.53.0',
 )
@@ -38,8 +39,6 @@ endif
 
 cdata.set('HAVE_STRNDUP', cc.has_function('strndup'))
 cdata.set('HAVE_MKDIRP', cc.has_function('mkdirp'))
-
-cdata.set('HAS_PULSEAUDIO', 1)
 
 # Instead of generating config.h directly, make vcs_tag generate it so that
 # @VCS_TAG@ is replaced.
@@ -139,7 +138,6 @@ yajl_dep = dependency('yajl', method: 'pkg-config')
 
 i3status_srcs = [
   'i3status.c',
-  'src/auto_detect_format.c',
   'src/first_network_device.c',
   'src/format_placeholders.c',
   'src/general.c',
@@ -152,12 +150,9 @@ i3status_srcs = [
   'src/print_ipv6_addr.c',
   'src/print_load.c',
   'src/print_mem.c',
-  'src/print_path_exists.c',
-  'src/print_run_watch.c',
   'src/print_time.c',
   'src/print_volume.c',
   'src/print_wireless_info.c',
-  'src/process_runs.c',
 ]
 
 thread_dep = dependency('threads')

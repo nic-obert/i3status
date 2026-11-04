@@ -1,5 +1,3 @@
-// vim:ts=4:sw=4:expandtab
-#include <config.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>

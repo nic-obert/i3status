@@ -1,12 +1,9 @@
 #ifndef _I3STATUS_H
 #define _I3STATUS_H
 
+// TODO: since we only use i3bar, this enum may be unnecessary
 typedef enum {
-    O_DZEN2,
-    O_XMOBAR,
     O_I3BAR,
-    O_LEMONBAR,
-    O_TERM,
     O_NONE
 } output_format_t;
 extern output_format_t output_format;
@@ -16,8 +13,6 @@ typedef enum {
     M_NONE
 } markup_format_t;
 extern markup_format_t markup_format;
-
-extern char *pct_mark;
 
 #include <stdbool.h>
 #include <confuse.h>
@@ -38,33 +33,7 @@ extern char *pct_mark;
 #define DECOMPOSE_MUTED(cvol) (((cvol) & (1 << 30)) != 0)
 #define MAX_SINK_DESCRIPTION_LEN (128) /* arbitrary */
 
-#if defined(__linux__)
-
 #define THERMAL_ZONE "/sys/class/thermal/thermal_zone%d/temp"
-
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
-
-/* this needs the coretemp module to be loaded */
-#if defined(__DragonFly__)
-#define THERMAL_ZONE "hw.sensors.cpu%d.temp0"
-#else
-#define THERMAL_ZONE "dev.cpu.%d.temperature"
-#endif
-#define BATT_LIFE "hw.acpi.battery.life"
-#define BATT_TIME "hw.acpi.battery.time"
-#define BATT_STATE "hw.acpi.battery.state"
-
-#elif defined(__OpenBSD__) || defined(__NetBSD__)
-/* Default to acpitz(4) if no path is set. */
-#define THERMAL_ZONE "acpitz%d"
-#endif
-
-#if defined(__FreeBSD_kernel__) && defined(__GLIBC__)
-
-#include <sys/stat.h>
-#include <sys/param.h>
-
-#endif
 
 /* Allows for the definition of a variable without opening a new scope, thus
  * suited for usage in a macro. Idea from wmii. */
@@ -163,7 +132,7 @@ extern char *pct_mark;
 #define END_COLOR                                                             \
     do {                                                                      \
         if (cfg_getbool(cfg_general, "colors") && output_format != O_I3BAR) { \
-            outwalk += sprintf(outwalk, "%s", endcolor());                    \
+            *outwalk = '\0';                   \
         }                                                                     \
     } while (0)
 
@@ -202,7 +171,6 @@ char *sstrdup(const char *str);
 /* src/output.c */
 void print_separator(const char *separator);
 char *color(const char *colorstr);
-char *endcolor() __attribute__((pure));
 void reset_cursor(void);
 void maybe_escape_markup(char *text, char *buffer, size_t size);
 
@@ -219,9 +187,6 @@ typedef struct {
     const char *value;
 } placeholder_t;
 char *format_placeholders(const char *format, placeholder_t *placeholders, int num);
-
-/* src/auto_detect_format.c */
-char *auto_detect_format();
 
 /* src/print_time.c */
 void set_timezone(const char *tz);
@@ -256,8 +221,6 @@ typedef struct {
     const char *threshold_type;
     const double low_threshold;
 } disk_info_ctx_t;
-
-void print_disk_info(disk_info_ctx_t *ctx);
 
 typedef struct {
     yajl_gen json_gen;
@@ -304,8 +267,6 @@ typedef struct {
     time_t t;
 } ddate_ctx_t;
 
-void print_ddate(ddate_ctx_t *ctx);
-
 const char *get_ip_addr(const char *interface, int family);
 
 typedef struct {
@@ -322,30 +283,6 @@ typedef struct {
 } wireless_info_ctx_t;
 
 void print_wireless_info(wireless_info_ctx_t *ctx);
-
-typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
-    const char *title;
-    const char *pidfile;
-    const char *format;
-    const char *format_down;
-} run_watch_ctx_t;
-
-void print_run_watch(run_watch_ctx_t *ctx);
-
-typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
-    const char *title;
-    const char *path;
-    const char *format;
-    const char *format_down;
-} path_exists_ctx_t;
-
-void print_path_exists(path_exists_ctx_t *ctx);
 
 typedef struct {
     yajl_gen json_gen;
@@ -439,8 +376,6 @@ typedef struct {
     const char *format_bad;
     const int max_chars;
 } file_contents_ctx_t;
-
-void print_file_contents(file_contents_ctx_t *ctx);
 
 /* socket file descriptor for general purposes */
 extern int general_socket;

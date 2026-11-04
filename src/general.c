@@ -1,5 +1,3 @@
-// vim:ts=4:sw=4:expandtab
-#include <config.h>
 #include <sys/types.h>
 #include <string.h>
 #include <stdarg.h>
@@ -8,7 +6,6 @@
 #include <unistd.h>
 #include <glob.h>
 #include <sys/fcntl.h>
-#include <sys/stat.h>
 
 #include "i3status.h"
 

@@ -6,8 +6,6 @@
  *
  */
 // copied from  i3:libi3/format_placeholders.c
-#include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

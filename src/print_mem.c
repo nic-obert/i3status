@@ -1,4 +1,3 @@
-// vim:ts=4:sw=4:expandtab
 #include <config.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -12,12 +11,9 @@
 
 #define BINARY_BASE 1024UL
 
-#if defined(__linux__)
 static const char *const iec_symbols[] = {"B", "KiB", "MiB", "GiB", "TiB"};
 #define MAX_EXPONENT ((sizeof iec_symbols / sizeof *iec_symbols) - 1)
-#endif
 
-#if defined(__linux__)
 /*
  * Prints the given amount of bytes in a human readable manner.
  *
@@ -38,11 +34,9 @@ static int print_bytes_human(char *outwalk, unsigned long bytes, const char *uni
 }
 
 static int print_percentage(char *outwalk, float percent) {
-    return snprintf(outwalk, STRING_SIZE, "%.1f%s", percent, pct_mark);
+    return snprintf(outwalk, STRING_SIZE, "%.1f%s", percent, "%");
 }
-#endif
 
-#if defined(__linux__)
 /*
  * Convert a string to its absolute representation based on the total
  * memory of `mem_total`.
@@ -84,12 +78,10 @@ static unsigned long memory_absolute(const char *mem_amount, const unsigned long
 
     return amount;
 }
-#endif
 
 void print_memory(memory_ctx_t *ctx) {
     char *outwalk = ctx->buf;
 
-#if defined(__linux__)
     const char *selected_format = ctx->format;
     const char *output_color = NULL;
 
@@ -214,8 +206,4 @@ void print_memory(memory_ctx_t *ctx) {
 error:
     OUTPUT_FULL_TEXT("can't read memory");
     fputs("i3status: Cannot read system memory using /proc/meminfo\n", stderr);
-#else
-    OUTPUT_FULL_TEXT("");
-    fputs("i3status: Memory status information is not supported on this system\n", stderr);
-#endif
 }

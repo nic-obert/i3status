@@ -15,7 +15,6 @@ void print_load(load_ctx_t *ctx) {
     char *outwalk = ctx->buf;
     /* Get load */
 
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__linux__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__APPLE__) || defined(sun) || defined(__DragonFly__)
     double loadavg[3];
     const char *selected_format = ctx->format;
     bool colorful_output = false;
@@ -56,7 +55,6 @@ void print_load(load_ctx_t *ctx) {
 
     return;
 error:
-#endif
     OUTPUT_FULL_TEXT("cant read load");
     (void)fputs("i3status: Cannot read system load using getloadavg()\n", stderr);
 }

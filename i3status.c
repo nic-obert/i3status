@@ -69,8 +69,6 @@ pthread_t main_thread;
 markup_format_t markup_format;
 output_format_t output_format;
 
-char *pct_mark;
-
 /*
  * Set the exit_upon_signal flag, because one cannot do anything in a safe
  * manner in a signal handler (e.g. fprintf, which we really want to do for
@@ -159,15 +157,8 @@ static int parse_min_width(cfg_t *context, cfg_opt_t *option, const char *value,
 static int valid_color(const char *value) {
     const int len = strlen(value);
 
-    if (output_format == O_LEMONBAR) {
-        /* lemonbar supports an optional alpha channel */
-        if (len != strlen("#rrggbb") && len != strlen("#aarrggbb")) {
-            return 0;
-        }
-    } else {
-        if (len != strlen("#rrggbb")) {
-            return 0;
-        }
+    if (len != strlen("#rrggbb")) {
+        return 0;
     }
     if (value[0] != '#')
         return 0;
@@ -235,10 +226,9 @@ static char *get_config_path(void) {
 
 /*
  * Returns the default separator to use if no custom separator has been specified.
+ TODO: maybe inline and remove or replace with a global constant
  */
 static char *get_default_separator() {
-    if (output_format == O_DZEN2)
-        return "^p(5;-2)^ro(2)^p()^p(5)";
     if (output_format == O_I3BAR)
         // anything besides the empty string indicates that the default separator should be used
         return "default";
@@ -251,33 +241,11 @@ int main(int argc, char *argv[]) {
     cfg_opt_t general_opts[] = {
         CFG_STR("output_format", "auto", CFGF_NONE),
         CFG_BOOL("colors", 1, CFGF_NONE),
-        CFG_STR("separator", "default", CFGF_NONE),
+        CFG_STR("separator", "default", CFGF_NONE), // TODO: Why is "default" a string?
         CFG_STR("color_separator", "#333333", CFGF_NONE),
         CFG_INT("interval", 1, CFGF_NONE),
         CFG_COLOR_OPTS("#00FF00", "#FFFF00", "#FF0000"),
         CFG_STR("markup", "none", CFGF_NONE),
-        CFG_END()};
-
-    cfg_opt_t run_watch_opts[] = {
-        CFG_STR("pidfile", NULL, CFGF_NONE),
-        CFG_STR("format", "%title: %status", CFGF_NONE),
-        CFG_STR("format_down", NULL, CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
-        CFG_CUSTOM_COLOR_OPTS,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
-        CFG_END()};
-
-    cfg_opt_t path_exists_opts[] = {
-        CFG_STR("path", NULL, CFGF_NONE),
-        CFG_STR("format", "%title: %status", CFGF_NONE),
-        CFG_STR("format_down", NULL, CFGF_NONE),
-        CFG_CUSTOM_ALIGN_OPT,
-        CFG_CUSTOM_COLOR_OPTS,
-        CFG_CUSTOM_MIN_WIDTH_OPT,
-        CFG_CUSTOM_SEPARATOR_OPT,
-        CFG_CUSTOM_SEP_BLOCK_WIDTH_OPT,
         CFG_END()};
 
     cfg_opt_t wireless_opts[] = {
@@ -424,8 +392,6 @@ int main(int argc, char *argv[]) {
     cfg_opt_t opts[] = {
         CFG_STR_LIST("order", "{}", CFGF_NONE),
         CFG_SEC("general", general_opts, CFGF_NONE),
-        CFG_SEC("run_watch", run_watch_opts, CFGF_TITLE | CFGF_MULTI),
-        CFG_SEC("path_exists", path_exists_opts, CFGF_TITLE | CFGF_MULTI),
         CFG_SEC("wireless", wireless_opts, CFGF_TITLE | CFGF_MULTI),
         CFG_SEC("ethernet", ethernet_opts, CFGF_TITLE | CFGF_MULTI),
         CFG_SEC("battery", battery_opts, CFGF_TITLE | CFGF_MULTI),
@@ -478,17 +444,11 @@ int main(int argc, char *argv[]) {
                        "Syntax: %s [-c <configfile>] [-h] [-v] [--run-once]\n",
                        argv[0]);
                 return 0;
-                break;
             case 'v':
                 printf("i3status " I3STATUS_VERSION " © 2008 Michael Stapelberg and contributors\n"
-#if HAS_PULSEAUDIO
                        "Built with pulseaudio support\n"
-#else
-                       "Built without pulseaudio support\n"
-#endif
                 );
                 return 0;
-                break;
             case 0:
                 if (strcmp(long_options[option_index].name, "run-once") == 0) {
                     run_once = true;
@@ -514,7 +474,7 @@ int main(int argc, char *argv[]) {
     char *output_str = cfg_getstr(cfg_general, "output_format");
     if (strcasecmp(output_str, "auto") == 0) {
         fprintf(stderr, "i3status: trying to auto-detect output_format setting\n");
-        output_str = auto_detect_format();
+        output_str = "i3bar";
         if (!output_str) {
             output_str = "none";
             fprintf(stderr, "i3status: falling back to \"none\"\n");
@@ -523,25 +483,14 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (strcasecmp(output_str, "dzen2") == 0)
-        output_format = O_DZEN2;
-    else if (strcasecmp(output_str, "xmobar") == 0)
-        output_format = O_XMOBAR;
-    else if (strcasecmp(output_str, "i3bar") == 0)
+    if (strcasecmp(output_str, "i3bar") == 0)
         output_format = O_I3BAR;
-    else if (strcasecmp(output_str, "lemonbar") == 0)
-        output_format = O_LEMONBAR;
-    else if (strcasecmp(output_str, "term") == 0)
-        output_format = O_TERM;
     else if (strcasecmp(output_str, "none") == 0)
         output_format = O_NONE;
     else
         die("Unknown output format: \"%s\"\n", output_str);
 
     const char *separator = cfg_getstr(cfg_general, "separator");
-
-    /* lemonbar needs % to be escaped with another % */
-    pct_mark = (output_format == O_LEMONBAR) ? "%%" : "%";
 
     // if no custom separator has been provided, use the default one
     if (strcasecmp(separator, "default") == 0)
@@ -567,12 +516,6 @@ int main(int argc, char *argv[]) {
         fflush(stdout);
         yajl_gen_array_open(json_gen);
         yajl_gen_clear(json_gen);
-    }
-    if (output_format == O_TERM) {
-        /* Save the cursor-position and hide the cursor */
-        printf("\033[s\033[?25l");
-        /* Undo at exit */
-        atexit(&reset_cursor);
     }
 
     if ((general_socket = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
@@ -623,9 +566,6 @@ int main(int argc, char *argv[]) {
         gettimeofday(&tv, NULL);
         if (output_format == O_I3BAR)
             yajl_gen_array_open(json_gen);
-        else if (output_format == O_TERM)
-            /* Restore the cursor-position, clear line */
-            printf("\033[u\033[K");
         for (j = 0; j < cfg_size(cfg, "order"); j++) {
             cur_instance = per_instance + j;
             if (j > 0)
@@ -710,36 +650,6 @@ int main(int argc, char *argv[]) {
                     .hide_seconds = cfg_getbool(sec, "hide_seconds"),
                 };
                 print_battery_info(&ctx);
-                SEC_CLOSE_MAP;
-            }
-
-            CASE_SEC_TITLE("run_watch") {
-                SEC_OPEN_MAP("run_watch");
-                run_watch_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .title = title,
-                    .pidfile = cfg_getstr(sec, "pidfile"),
-                    .format = cfg_getstr(sec, "format"),
-                    .format_down = cfg_getstr(sec, "format_down"),
-                };
-                print_run_watch(&ctx);
-                SEC_CLOSE_MAP;
-            }
-
-            CASE_SEC_TITLE("path_exists") {
-                SEC_OPEN_MAP("path_exists");
-                path_exists_ctx_t ctx = {
-                    .json_gen = json_gen,
-                    .buf = buffer,
-                    .buflen = sizeof(buffer),
-                    .title = title,
-                    .path = cfg_getstr(sec, "path"),
-                    .format = cfg_getstr(sec, "format"),
-                    .format_down = cfg_getstr(sec, "format_down"),
-                };
-                print_path_exists(&ctx);
                 SEC_CLOSE_MAP;
             }
 
