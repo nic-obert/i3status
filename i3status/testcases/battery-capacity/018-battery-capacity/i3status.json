@@ -1,0 +1,10 @@
+{
+  "general": {},
+  "order": {
+    "battery": {
+      "format": "%percentage",
+      "path": "testcases/battery-capacity/%d/uevent",
+      "batno": "all"
+    }
+  }
+}

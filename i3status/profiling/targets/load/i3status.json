@@ -1,0 +1,10 @@
+{
+    "general": {
+        "interval": 50
+    },
+    "order": {
+        "load": {
+            "format": "%1min %5min %15min"
+        }
+    }
+}

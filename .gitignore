@@ -3,6 +3,8 @@
 man/i3status.1
 /build
 i3status/build
+i3status/build-profile
 /pkg
 /src
 *.tar.zst
+*.svg

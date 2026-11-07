@@ -1,0 +1,11 @@
+{
+  "general": {},
+  "order": {
+    "cpu_temperature": {
+      "format_above_threshold": "ABOVE_THRESHOLD: %degrees °C",
+      "max_threshold": 45,
+      "path": "testcases/cpu-temp-max-threshold-format/temp1_input",
+      "zone": 0
+    }
+  }
+}

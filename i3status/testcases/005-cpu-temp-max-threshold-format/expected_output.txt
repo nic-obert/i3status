@@ -1,3 +1,0 @@
-{"version":1}
-[
-[{"name":"cpu_temperature","instance":"testcases/005-cpu-temp-max-threshold-format/temp1_input","color":"#FF0000","full_text":"ABOVE_THRESHOLD: 50 °C"}]

@@ -1,0 +1,10 @@
+{
+  "general": {},
+  "order": {
+    "cpu_temperature": {
+      "format": "T: %degrees °C",
+      "path": "testcases/cpu-temp/temp1_input",
+      "zone": 0
+    }
+  }
+}

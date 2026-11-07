@@ -1,0 +1,12 @@
+{
+    "general": {
+        "interval": 50
+    },
+    "order": {
+        "wireless": {
+            "format_up": "W: (%quality at %essid) %ip",
+            "format_down": "W: down",
+            "interface": "_first_"
+        }
+    }
+}

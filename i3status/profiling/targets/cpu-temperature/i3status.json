@@ -1,0 +1,13 @@
+{
+    "general": {
+        "interval": 50
+    },
+    "order": {
+        "cpu_temperature": {
+            "format": "%degrees C",
+            "format_above_threshold": "%degrees C",
+            "path": "/sys/class/thermal/thermal_zone%d/temp",
+            "zone": 0
+        }
+    }
+}

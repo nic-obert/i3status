@@ -1,0 +1,11 @@
+{
+    "general": {
+        "interval": 50
+    },
+    "order": {
+        "ipv6": {
+            "format_up": "%ip",
+            "format_down": "no IPv6"
+        }
+    }
+}

@@ -1,0 +1,11 @@
+{
+    "general": {
+        "interval": 50
+    },
+    "order": {
+        "tztime": {
+            "title": "local",
+            "format": "%Y-%m-%d %H:%M:%S %Z"
+        }
+    }
+}

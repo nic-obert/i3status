@@ -1,0 +1,12 @@
+{
+    "general": {
+        "interval": 50
+    },
+    "order": {
+        "battery": {
+            "format": "%status %percentage %remaining %consumption",
+            "format_down": "No battery",
+            "batno": "all"
+        }
+    }
+}

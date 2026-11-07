@@ -305,14 +305,10 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        /* To provide updates on every full second (as good as possible)
-         * we don’t use sleep(interval) but we sleep until the next
-         * second (with microsecond precision) plus (interval-1)
-         * seconds. We also align to 60 seconds modulo interval such
-         * that we start with :00 on every new minute. */
-        struct timeval current_timeval;
-        gettimeofday(&current_timeval, NULL);
-        struct timespec ts = {interval - 1 - (current_timeval.tv_sec % interval), (10e5 - current_timeval.tv_usec) * 1000};
+        struct timespec ts = {
+            interval / 1000,
+            (interval % 1000) * 1000000L
+        };
         nanosleep(&ts, NULL);
     }
 

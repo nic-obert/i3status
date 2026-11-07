@@ -1,0 +1,11 @@
+{
+  "general": {},
+  "order": {
+    "battery": {
+      "format": "%status %percentage %remaining",
+      "path": "testcases/battery-second/BAT%d_uevent",
+      "hide_seconds": false,
+      "batno": "all"
+    }
+  }
+}

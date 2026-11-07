@@ -1,0 +1,10 @@
+{
+  "general": {},
+  "order": {
+    "battery": {
+      "format": "I can %haz literal% % ?",
+      "path": "testcases/percentliteral-battery/BAT%d_uevent",
+      "batno": "all"
+    }
+  }
+}

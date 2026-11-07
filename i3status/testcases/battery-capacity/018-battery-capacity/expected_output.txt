@@ -1,0 +1,3 @@
+{"version":1}
+[
+[{"name":"battery","instance":"testcases/battery-capacity/1/uevent","full_text":"50.00%"}]

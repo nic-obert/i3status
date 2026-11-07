@@ -1,0 +1,10 @@
+{
+    "general": {
+        "interval": 50
+    },
+    "order": {
+        "memory": {
+            "format": "%used %free %available"
+        }
+    }
+}

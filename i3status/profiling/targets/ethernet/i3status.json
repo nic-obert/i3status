@@ -1,0 +1,12 @@
+{
+    "general": {
+        "interval": 50
+    },
+    "order": {
+        "ethernet": {
+            "format_up": "E: %ip (%speed)",
+            "format_down": "E: down",
+            "interface": "_first_"
+        }
+    }
+}

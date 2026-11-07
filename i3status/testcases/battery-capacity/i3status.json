@@ -1,0 +1,12 @@
+{
+  "general": {},
+  "order": {
+    "battery": {
+      "format": "Touchpad: %percentage %status %remaining",
+      "format_down": "No touchpad",
+      "path": "testcases/battery-capacity/uevent",
+      "low_threshold": 10,
+      "batno": 1
+    }
+  }
+}

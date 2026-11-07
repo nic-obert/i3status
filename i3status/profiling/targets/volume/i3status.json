@@ -1,0 +1,13 @@
+{
+    "general": {
+        "interval": 50
+    },
+    "order": {
+        "volume": {
+            "title": "default",
+            "format": "volume: %volume",
+            "format_muted": "muted: %volume",
+            "device": "default"
+        }
+    }
+}

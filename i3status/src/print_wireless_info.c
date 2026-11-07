@@ -1,5 +1,3 @@
-// vim:ts=4:sw=4:expandtab
-#include <config.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -7,7 +5,6 @@
 #include <yajl/yajl_version.h>
 #include <sys/socket.h>
 
-#include <errno.h>
 #include <net/if.h>
 #include <netlink/netlink.h>
 #include <netlink/genl/genl.h>

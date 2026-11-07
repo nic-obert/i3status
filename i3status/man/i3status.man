@@ -59,7 +59,7 @@ Comments are supported in configuration files.
 {
   "general": {
     "colors": true,
-    "interval": 5
+    "interval": 5000
   },
   "order": [
     "ipv6",
@@ -104,8 +104,8 @@ will be used to paint the separator bar. The separator is always output in
 color, even when colors are disabled by the +colors+ directive. This option has
 no effect when +output_format+ is set to +i3bar+ or +none+.
 
-The +interval+ directive specifies the time in seconds for which i3status will
-sleep before printing the next status line.
+The +interval+ directive specifies the time in milliseconds for which i3status
+will sleep before printing the next status line. It must be greater than zero.
 
 Using +output_format+ you can choose which format strings i3status should
 use in its output. Currently available are:

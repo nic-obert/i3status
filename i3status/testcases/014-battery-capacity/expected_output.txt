@@ -1,3 +1,0 @@
-{"version":1}
-[
-[{"name":"battery","instance":"testcases/014-battery-capacity/uevent","full_text":"Touchpad: 100.00% BAT"}]

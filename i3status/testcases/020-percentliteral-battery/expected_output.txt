@@ -1,3 +1,0 @@
-{"version":1}
-[
-[{"name":"battery","instance":"testcases/020-percentliteral-battery/BAT0_uevent","full_text":"I can %haz literal% % ?"}]

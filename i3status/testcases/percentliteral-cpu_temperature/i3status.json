@@ -1,0 +1,10 @@
+{
+  "general": {},
+  "order": {
+    "cpu_temperature": {
+      "format": "I can %haz literal% % ?",
+      "path": "testcases/percentliteral-cpu_temperature/temp1_input",
+      "zone": 0
+    }
+  }
+}

@@ -349,8 +349,12 @@ static int yajl_number(void *ctx, const char *value, size_t length) {
     parser_state_t *state = ctx;
     char *number = copy_json_string((const unsigned char *)value, length);
     bool ok = state->key != NULL && number != NULL;
-    if (ok && state->map == MAP_GENERAL && strcmp(state->key, "interval") == 0)
-        ok = parse_unsigned(number, &state->config->general.interval);
+    if (ok && state->map == MAP_GENERAL && strcmp(state->key, "interval") == 0) {
+        unsigned int interval;
+        ok = parse_unsigned(number, &interval) && interval > 0;
+        if (ok)
+            state->config->general.interval = interval;
+    }
     else if (ok && state->map == MAP_ITEM)
         ok = set_item_number(state->item, state->key, number);
     free(number); free(state->key); state->key = NULL;

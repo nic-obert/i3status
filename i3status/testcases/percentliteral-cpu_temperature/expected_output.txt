@@ -1,0 +1,3 @@
+{"version":1}
+[
+[{"name":"cpu_temperature","instance":"testcases/percentliteral-cpu_temperature/temp1_input","full_text":"I can %haz literal% % ?"}]

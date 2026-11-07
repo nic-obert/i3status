@@ -1,0 +1,53 @@
+{
+    "general": {
+        "interval": 50
+    },
+    "order": {
+        "ipv6": {
+            "format_up": "IPv6: %ip",
+            "format_down": "IPv6: down"
+        },
+        "wireless": {
+            "format_up": "W: (%quality at %essid, %bitrate) %ip",
+            "format_down": "W: down",
+            "interface": "_first_"
+        },
+        "ethernet": {
+            "format_up": "E: %ip (%speed)",
+            "format_down": "E: down",
+            "interface": "_first_"
+        },
+        "battery": {
+            "format": "%status %percentage %remaining %consumption",
+            "format_down": "No battery",
+            "batno": "all"
+        },
+        "load": {
+            "format": "%1min %5min %15min"
+        },
+        "memory": {
+            "format": "%used %free %available"
+        },
+        "tztime": {
+            "title": "local",
+            "format": "%Y-%m-%d %H:%M:%S %Z"
+        },
+        "volume": {
+            "title": "default",
+            "format": "volume: %volume",
+            "format_muted": "muted: %volume",
+            "device": "default"
+        },
+        "cpu_temperature": {
+            "format": "T: %degrees C",
+            "format_above_threshold": "T: %degrees C",
+            "path": "/sys/class/thermal/thermal_zone%d/temp",
+            "zone": 0
+        },
+        "cpu_usage": {
+            "format": "CPU: %usage",
+            "format_above_threshold": "CPU: %usage",
+            "path": "/proc/stat"
+        }
+    }
+}

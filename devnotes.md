@@ -1,4 +1,13 @@
 
+## Optimizations
+Profiling revealed the hottest functions are, in order:
+- print_wireless_info
+    - get_wireless_info
+    - get_ip_addr
+- first_net_interface
+- print_battery_info
+- print_cpu_usage
+
 
 ## Fix I3STATUS_VERSION
 `config.h` contains the definition. There should only be one authority for the package version
@@ -11,7 +20,7 @@ New config file format:
 {
     // General options
     "general": {
-      "interval": 5
+      "interval": 5000
     },
     // Ordered map of sections to be shown in the status bar
     "order": {
