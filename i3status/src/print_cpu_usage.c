@@ -28,10 +28,10 @@ static struct cpu_usage *curr_cpus = NULL;
  * percentage.
  *
  */
-void print_cpu_usage(cpu_usage_ctx_t *ctx) {
+void print_cpu_usage(cpu_usage_ctx_t *ctx, output_ctx_t *out_ctx) {
     const char *selected_format = ctx->format;
     const char *walk;
-    char *outwalk = ctx->buf;
+    char *outwalk = out_ctx->buf;
     struct cpu_usage curr_all = {0, 0, 0, 0, 0};
     int diff_idle, diff_total;
     int diff_usage;
@@ -96,11 +96,11 @@ void print_cpu_usage(cpu_usage_ctx_t *ctx) {
     prev_all = curr_all;
 
     if (diff_usage >= ctx->max_threshold) {
-        START_COLOR("color_bad");
+        START_COLOR(bad);
         if (ctx->format_above_threshold != NULL)
             selected_format = ctx->format_above_threshold;
     } else if (diff_usage >= ctx->degraded_threshold) {
-        START_COLOR("color_degraded");
+        START_COLOR(degraded);
         if (ctx->format_above_degraded_threshold != NULL)
             selected_format = ctx->format_above_degraded_threshold;
     }
@@ -138,7 +138,7 @@ void print_cpu_usage(cpu_usage_ctx_t *ctx) {
     prev_cpus = curr_cpus;
     curr_cpus = temp_cpus;
 
-    OUTPUT_FULL_TEXT(ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx->buf);
     return;
 error:
     OUTPUT_FULL_TEXT("cant read cpu usage");

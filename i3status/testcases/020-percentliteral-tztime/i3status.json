@@ -1,0 +1,9 @@
+{
+  "general": {},
+  "order": {
+    "tztime": {
+      "format_time": "I can %haz literal% % ?",
+      "title": "berlin"
+    }
+  }
+}

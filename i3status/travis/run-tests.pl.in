@@ -14,7 +14,7 @@ sub TestCase {
         system($EXECUTABLE_NAME, "@_/setup.pl", ($dir));
     }
 
-    my $conf = "$dir/i3status.conf";
+    my $conf = "$dir/i3status.json";
     my $testres = `cd @abs_top_srcdir@ && LC_ALL=C @abs_top_builddir@/i3status --run-once -c $conf`;
     my $exitcode = $?;
     my $refres = "";

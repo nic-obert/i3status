@@ -1,0 +1,8 @@
+{
+  "general": {},
+  "order": {
+    "cpu_usage": {
+      "format": "CPU: %cpu"
+    }
+  }
+}

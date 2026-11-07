@@ -36,8 +36,8 @@ void set_timezone(const char *tz) {
     tzset();
 }
 
-void print_time(time_ctx_t *ctx) {
-    char *outwalk = ctx->buf;
+void print_time(time_ctx_t *ctx, output_ctx_t *out_ctx) {
+    char *outwalk = out_ctx->buf;
     struct tm local_tm, tm;
 
     if (ctx->title != NULL)
@@ -63,7 +63,7 @@ void print_time(time_ctx_t *ctx) {
     char string_time[STRING_SIZE];
 
     if (ctx->format_time == NULL) {
-        outwalk += strftime(ctx->buf, 4096, ctx->format, &tm);
+        outwalk += strftime(out_ctx->buf, PLUGIN_BUF_LEN, ctx->format, &tm);
     } else {
         strftime(string_time, sizeof(string_time), ctx->format_time, &tm);
         placeholder_t placeholders[] = {
@@ -81,5 +81,5 @@ void print_time(time_ctx_t *ctx) {
 
 out:
     *outwalk = '\0';
-    OUTPUT_FULL_TEXT(ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx->buf);
 }

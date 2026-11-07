@@ -93,8 +93,8 @@ static void add_battery_info(struct battery_info *acc, const struct battery_info
     acc->present_rate = abs(present_rate);
 }
 
-static bool slurp_battery_info(battery_info_ctx_t *ctx, struct battery_info *batt_info, yajl_gen json_gen, char *buffer, int number, const char *path, const char *format_down) {
-    char *outwalk = buffer;
+static bool slurp_battery_info(battery_info_ctx_t *ctx, struct battery_info *batt_info, output_ctx_t *out_ctx, int number, const char *path, const char *format_down) {
+    char *outwalk = out_ctx->buf;
 
     char buf[1024];
     const char *walk, *last;
@@ -189,8 +189,8 @@ static bool slurp_battery_info(battery_info_ctx_t *ctx, struct battery_info *bat
  * Populate batt_info with aggregate information about all batteries.
  * Returns false on error, and an error message will have been written.
  */
-static bool slurp_all_batteries(battery_info_ctx_t *ctx, struct battery_info *batt_info, yajl_gen json_gen, char *buffer, const char *path, const char *format_down) {
-    char *outwalk = buffer;
+static bool slurp_all_batteries(battery_info_ctx_t *ctx, struct battery_info *batt_info, output_ctx_t *out_ctx, const char *path, const char *format_down) {
+    char *outwalk = out_ctx->buf;
     bool is_found = false;
 
     char *placeholder;
@@ -217,7 +217,7 @@ static bool slurp_all_batteries(battery_info_ctx_t *ctx, struct battery_info *ba
                 .present_rate = 0,
                 .status = CS_UNKNOWN,
             };
-            if (!slurp_battery_info(ctx, &batt_buf, json_gen, buffer, i, globbuf.gl_pathv[i], format_down)) {
+            if (!slurp_battery_info(ctx, &batt_buf, out_ctx, i, globbuf.gl_pathv[i], format_down)) {
                 globfree(&globbuf);
                 free(globpath);
                 return false;
@@ -240,8 +240,8 @@ static bool slurp_all_batteries(battery_info_ctx_t *ctx, struct battery_info *ba
     return true;
 }
 
-void print_battery_info(battery_info_ctx_t *ctx) {
-    char *outwalk = ctx->buf;
+void print_battery_info(battery_info_ctx_t *ctx, output_ctx_t *out_ctx) {
+    char *outwalk = out_ctx->buf;
     struct battery_info batt_info = {
         .full_design = -1,
         .full_last = -1,
@@ -253,10 +253,10 @@ void print_battery_info(battery_info_ctx_t *ctx) {
     };
 
     if (ctx->number < 0) {
-        if (!slurp_all_batteries(ctx, &batt_info, ctx->json_gen, ctx->buf, ctx->path, ctx->format_down))
+        if (!slurp_all_batteries(ctx, &batt_info, out_ctx, ctx->path, ctx->format_down))
             return;
     } else {
-        if (!slurp_battery_info(ctx, &batt_info, ctx->json_gen, ctx->buf, ctx->number, ctx->path, ctx->format_down))
+        if (!slurp_battery_info(ctx, &batt_info, out_ctx, ctx->number, ctx->path, ctx->format_down))
             return;
     }
 
@@ -301,10 +301,10 @@ void print_battery_info(battery_info_ctx_t *ctx) {
     }
 
     if (batt_info.status == CS_DISCHARGING && ctx->low_threshold > 0) {
-        if (batt_info.percentage_remaining >= 0 && strcasecmp(ctx->threshold_type, "percentage") == 0 && batt_info.percentage_remaining < ctx->low_threshold) {
-            START_COLOR("color_bad");
-        } else if (batt_info.seconds_remaining >= 0 && strcasecmp(ctx->threshold_type, "time") == 0 && batt_info.seconds_remaining < 60 * ctx->low_threshold) {
-            START_COLOR("color_bad");
+        if (batt_info.percentage_remaining >= 0 && ctx->threshold_type == PERCENTAGE && batt_info.percentage_remaining < ctx->low_threshold) {
+            START_COLOR(bad);
+        } else if (batt_info.seconds_remaining >= 0 && ctx->threshold_type == TIME && batt_info.seconds_remaining < 60 * ctx->low_threshold) {
+            START_COLOR(bad);
         }
     }
 
@@ -374,5 +374,5 @@ void print_battery_info(battery_info_ctx_t *ctx) {
     free(formatted);
     free(untrimmed);
 
-    OUTPUT_FULL_TEXT(ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx->buf);
 }

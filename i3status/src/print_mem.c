@@ -79,8 +79,8 @@ static unsigned long memory_absolute(const char *mem_amount, const unsigned long
     return amount;
 }
 
-void print_memory(memory_ctx_t *ctx) {
-    char *outwalk = ctx->buf;
+void print_memory(memory_ctx_t *ctx, output_ctx_t *out_ctx) {
+    char *outwalk = out_ctx->buf;
 
     const char *selected_format = ctx->format;
     const char *output_color = NULL;
@@ -143,19 +143,19 @@ void print_memory(memory_ctx_t *ctx) {
     if (ctx->threshold_degraded) {
         const unsigned long threshold = memory_absolute(ctx->threshold_degraded, ram_total);
         if (ram_available < threshold) {
-            output_color = "color_degraded";
+            output_color = general_cfg->color_opts.degraded;
         }
     }
 
     if (ctx->threshold_critical) {
         const unsigned long threshold = memory_absolute(ctx->threshold_critical, ram_total);
         if (ram_available < threshold) {
-            output_color = "color_bad";
+            output_color = general_cfg->color_opts.bad;
         }
     }
 
     if (output_color) {
-        START_COLOR(output_color);
+        START_COLOR_VAR(output_color);
 
         if (ctx->format_degraded)
             selected_format = ctx->format_degraded;
@@ -197,7 +197,7 @@ void print_memory(memory_ctx_t *ctx) {
     OUTPUT_FORMATTED;
     free(formatted);
 
-    OUTPUT_FULL_TEXT(ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx->buf);
 
     return;
 error:

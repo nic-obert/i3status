@@ -1,0 +1,9 @@
+{
+  "general": {},
+  "order": {
+    "cpu_usage": {
+      "format_above_threshold": "ABOVE_THRESHOLD",
+      "max_threshold": -1
+    }
+  }
+}

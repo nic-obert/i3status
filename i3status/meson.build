@@ -130,11 +130,11 @@ add_project_arguments('-D_GNU_SOURCE', language: 'c')
 m_dep = cc.find_library('m', required: false)
 rt_dep = cc.find_library('rt', required: false)
 
-confuse_dep = dependency('libconfuse', method: 'pkg-config')
 yajl_dep = dependency('yajl', method: 'pkg-config')
 
 i3status_srcs = [
   'i3status.c',
+  'src/config.c',
   'src/first_network_device.c',
   'src/format_placeholders.c',
   'src/general.c',
@@ -158,7 +158,6 @@ i3status_deps = [
   thread_dep,
   m_dep,
   rt_dep,
-  confuse_dep,
   yajl_dep,
   config_h,
 ]
@@ -227,4 +226,3 @@ test(
   args: [run_tests],
   timeout: 120,  # Default of 30 seconds can cause timeouts on slower machines
 )
-

@@ -6,14 +6,14 @@
 # Contributor: Ingo Bürk <ingo.buerk@airblader.de>
 
 pkgname=i3status
-pkgver=3.2
+pkgver=3.3
 pkgrel=1
 pkgdesc='Generates status bar to use with i3bar'
 arch=('x86_64')
 url='https://i3wm.org/i3status/'
 license=('BSD')
 groups=('i3')
-depends=('alsa-lib' 'confuse' 'libnl' 'libpulse' 'yajl')
+depends=('alsa-lib' 'libnl' 'libpulse' 'yajl')
 makedepends=('asciidoc' 'git' 'meson' 'xmlto')
 backup=('etc/i3status.conf')
 options=('docs')

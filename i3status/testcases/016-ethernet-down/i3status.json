@@ -1,0 +1,10 @@
+{
+  "general": {},
+  "order": {
+    "ethernet": {
+      "format_up": "E: %ip (%speed)",
+      "format_down": "E: down",
+      "interface": "nonsense"
+    }
+  }
+}

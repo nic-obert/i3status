@@ -1,0 +1,11 @@
+{
+  "general": {},
+  "order": {
+    "cpu_usage": {
+      "format": "all: %usage CPU_0: %cpu0 CPU_1: %cpu1",
+      "path": "testcases/012-cpu-usage-error/stat",
+      "max_threshold": 90,
+      "degraded_threshold": 75
+    }
+  }
+}

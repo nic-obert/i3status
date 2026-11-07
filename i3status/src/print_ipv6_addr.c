@@ -169,7 +169,7 @@ char *get_iface_addr(const char *searched_addr_string) {
     return iface_string;
 }
 
-void print_ipv6_info(ipv6_info_ctx_t *ctx) {
+void print_ipv6_info(ipv6_info_ctx_t *ctx, output_ctx_t *out_ctx) {
     const char *iface_placeholder = "%iface";
 
     char *addr_string = get_ipv6_addr();
@@ -179,16 +179,16 @@ void print_ipv6_info(ipv6_info_ctx_t *ctx) {
         (addr_string && strstr(ctx->format_up, iface_placeholder))
             ? get_iface_addr(addr_string)
             : "";
-    char *outwalk = ctx->buf;
+    char *outwalk = out_ctx->buf;
 
     if (addr_string == NULL) {
-        START_COLOR("color_bad");
+        START_COLOR(bad);
         outwalk += sprintf(outwalk, "%s", ctx->format_down);
-        OUTPUT_FULL_TEXT(ctx->buf);
+        OUTPUT_FULL_TEXT(out_ctx->buf);
         return;
     }
 
-    START_COLOR("color_good");
+    START_COLOR(good);
 
     placeholder_t placeholders[] = {
         {.name = "%ip", .value = addr_string},
@@ -199,5 +199,5 @@ void print_ipv6_info(ipv6_info_ctx_t *ctx) {
     OUTPUT_FORMATTED;
     free(formatted);
 
-    OUTPUT_FULL_TEXT(ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx->buf);
 }

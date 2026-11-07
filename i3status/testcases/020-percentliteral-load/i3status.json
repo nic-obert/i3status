@@ -1,0 +1,8 @@
+{
+  "general": {},
+  "order": {
+    "load": {
+      "format": "I can %haz literal% % ?"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "general": {},
+  "order": {
+    "ethernet": {
+      "format_down": "I can %haz literal% % ?",
+      "interface": "NONEXISTINGETHERNETDEVICE"
+    }
+  }
+}

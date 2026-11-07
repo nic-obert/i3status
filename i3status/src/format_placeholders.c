@@ -1,6 +1,4 @@
 /*
- * vim:ts=4:sw=4:expandtab
- *
  * i3 - an improved tiling window manager
  * © 2009 Michael Stapelberg and contributors (see also: LICENSE)
  *

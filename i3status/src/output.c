@@ -11,7 +11,7 @@
 
 char *color(const char *colorstr) {
     static char colorbuf[32];
-    if (!cfg_getbool(cfg_general, "colors")) {
+    if (!general_cfg->colors) {
         colorbuf[0] = '\0';
     }
     return colorbuf;

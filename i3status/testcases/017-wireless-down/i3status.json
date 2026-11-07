@@ -1,0 +1,10 @@
+{
+  "general": {},
+  "order": {
+    "wireless": {
+      "format_up": "W: (%quality at %essid) %ip",
+      "format_down": "W: down",
+      "interface": "nonsense"
+    }
+  }
+}

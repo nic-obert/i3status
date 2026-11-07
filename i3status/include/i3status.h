@@ -2,7 +2,6 @@
 #define _I3STATUS_H
 
 #include <stdbool.h>
-#include <confuse.h>
 #include <time.h>
 #include <yajl/yajl_gen.h>
 #include <yajl/yajl_version.h>
@@ -27,11 +26,11 @@
  * format is JSON) or just output to stdout (any other output format). */
 #define OUTPUT_FULL_TEXT(text)                                                                       \
     do {                                                                                             \
-        /* Terminate the output buffer here in any case, so that it’s                              \
+        /* Terminate the output buffer here in any case, so that it’s                                \
          * not forgotten in the module */                                                            \
         *outwalk = '\0';                                                                             \
-        yajl_gen_string(ctx->json_gen, (const unsigned char *)"full_text", strlen("full_text")); \
-        yajl_gen_string(ctx->json_gen, (const unsigned char *)text, strlen(text));               \
+        yajl_gen_string(out_ctx->json_gen, (const unsigned char *)"full_text", strlen("full_text")); \
+        yajl_gen_string(out_ctx->json_gen, (const unsigned char *)text, strlen(text));               \
     } while (0)
 
 #define SEC_OPEN_MAP(name)                                                            \
@@ -41,41 +40,49 @@
         yajl_gen_string(json_gen, (const unsigned char *)name, strlen(name));     \
     } while (0)
 
-#define SEC_CLOSE_MAP                                                                                                       \
-    do {                                                                                                                    \
-        const char *_sep = cfg_getstr(cfg_general, "separator");                                                        \
-        if (strlen(_sep) == 0) {                                                                                        \
-            yajl_gen_string(json_gen, (const unsigned char *)"separator", strlen("separator"));                         \
-            yajl_gen_bool(json_gen, false);                                                                             \
-        }                                                                                                               \
-        yajl_gen_map_close(json_gen);                                                                                   \
+#define SEC_CLOSE_MAP                                                                                 \
+    do {                                                                                              \
+        if (strlen(general_cfg->separator) == 0) {                                                    \
+            yajl_gen_string(json_gen, (const unsigned char *)"separator", strlen("separator"));       \
+            yajl_gen_bool(json_gen, false);                                                           \
+        }                                                                                             \
+        yajl_gen_map_close(json_gen);                                                                 \
     } while (0)
 
-#define START_COLOR(colorstr)                                                                    \
+#define START_COLOR_VAR(color)                                                                   \
     do {                                                                                         \
-        if (cfg_getbool(cfg_general, "colors")) {                                                \
-            const char *_val = NULL;                                                             \
-            if (cfg_section)                                                                     \
-                _val = cfg_getstr(cfg_section, colorstr);                                        \
-            if (!_val)                                                                           \
-                _val = cfg_getstr(cfg_general, colorstr);                                        \
-            yajl_gen_string(ctx->json_gen, (const unsigned char *)"color", strlen("color")); \
-            yajl_gen_string(ctx->json_gen, (const unsigned char *)_val, strlen(_val));       \
+        if (general_cfg->colors) {                                                               \
+            yajl_gen_string(out_ctx->json_gen, (const unsigned char *)"color", strlen("color")); \
+            yajl_gen_string(out_ctx->json_gen, (const unsigned char *)color, strlen(color));     \
+        }                                                                                        \
+    } while (0)
+
+#define START_COLOR(color)                                                                       \
+    do {                                                                                         \
+        if (general_cfg->colors) {                                                               \
+            yajl_gen_string(out_ctx->json_gen, (const unsigned char *)"color", strlen("color")); \
+            yajl_gen_string(out_ctx->json_gen, (const unsigned char *)general_cfg->color_opts.color, strlen(general_cfg->color_opts.color));       \
         }                                                                                        \
     } while (0)
 
 #define INSTANCE(instance)                                                                         \
     do {                                                                                           \
-        yajl_gen_string(ctx->json_gen, (const unsigned char *)"instance", strlen("instance")); \
-        yajl_gen_string(ctx->json_gen, (const unsigned char *)instance, strlen(instance));     \
+        yajl_gen_string(out_ctx->json_gen, (const unsigned char *)"instance", strlen("instance")); \
+        yajl_gen_string(out_ctx->json_gen, (const unsigned char *)instance, strlen(instance));     \
     } while (0)
 
 #define OUTPUT_FORMATTED                                             \
     do {                                                             \
-        const size_t remaining = ctx->buflen - (outwalk - ctx->buf); \
+        const size_t remaining = PLUGIN_BUF_LEN - (outwalk - out_ctx->buf); \
         strncpy(outwalk, formatted, remaining);                      \
         outwalk += strlen(formatted);                                \
     } while (0)
+
+
+typedef struct {
+    yajl_gen json_gen;
+    char* buf;
+} output_ctx_t;
 
 /* src/general.c */
 char *skip_character(char *input, char character, int amount);
@@ -113,23 +120,21 @@ typedef enum {
     NET_TYPE_ETHERNET = 1,
     NET_TYPE_OTHER = 2
 } net_type_t;
-const char *first_eth_interface(const net_type_t type);
+const char *first_net_interface(const net_type_t type);
 
 typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
     const char *format_up;
     const char *format_down;
 } ipv6_info_ctx_t;
 
-void print_ipv6_info(ipv6_info_ctx_t *ctx);
+void print_ipv6_info(ipv6_info_ctx_t *ctx, output_ctx_t *out_ctx);
+
+typedef enum : uint8_t {
+    PERCENTAGE,
+    TIME
+} bat_threshold_type_t;
 
 typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
-    int number;
     const char *path;
     const char *format;
     const char *format_down;
@@ -138,44 +143,31 @@ typedef struct {
     const char *status_unk;
     const char *status_full;
     const char *status_idle;
-    int low_threshold;
-    char *threshold_type;
-    bool last_full_capacity;
     const char *format_percentage;
+    int number;
+    bat_threshold_type_t threshold_type;
+    uint8_t low_threshold;
+    bool last_full_capacity;
     bool hide_seconds;
 } battery_info_ctx_t;
 
-void print_battery_info(battery_info_ctx_t *ctx);
+void print_battery_info(battery_info_ctx_t *ctx, output_ctx_t *out_ctx);
 
 typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
     const char *title;
     const char *format;
     const char *tz;
     const char *locale;
     const char *format_time;
-    bool hide_if_equals_localtime;
     time_t t;
+    bool hide_if_equals_localtime;
 } time_ctx_t;
 
-void print_time(time_ctx_t *ctx);
-
-typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
-    const char *format;
-    time_t t;
-} ddate_ctx_t;
+void print_time(time_ctx_t *ctx, output_ctx_t *out_ctx);
 
 const char *get_ip_addr(const char *interface, int family);
 
 typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
     const char *interface;
     const char *format_up;
     const char *format_down;
@@ -183,78 +175,62 @@ typedef struct {
     const char *format_noise;
     const char *format_quality;
     const char *format_signal;
+    bool use_first;
 } wireless_info_ctx_t;
 
-void print_wireless_info(wireless_info_ctx_t *ctx);
+void print_wireless_info(wireless_info_ctx_t *ctx, output_ctx_t *out_ctx);
 
 typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
-    int zone;
     const char *path;
     const char *format;
     const char *format_above_threshold;
+    int zone;
     int max_threshold;
 } cpu_temperature_ctx_t;
 
-void print_cpu_temperature_info(cpu_temperature_ctx_t *ctx);
+void print_cpu_temperature_info(cpu_temperature_ctx_t *ctx, output_ctx_t *out_ctx);
 
 typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
     const char *format;
     const char *format_above_threshold;
     const char *format_above_degraded_threshold;
     const char *path;
-    const float max_threshold;
-    const float degraded_threshold;
+    float max_threshold;
+    float degraded_threshold;
 } cpu_usage_ctx_t;
 
-void print_cpu_usage(cpu_usage_ctx_t *ctx);
+void print_cpu_usage(cpu_usage_ctx_t *ctx, output_ctx_t *out_ctx);
 
 typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
     const char *interface;
     const char *format_up;
     const char *format_down;
+    bool use_first;
 } eth_info_ctx_t;
 
-void print_eth_info(eth_info_ctx_t *ctx);
+void print_eth_info(eth_info_ctx_t *ctx, output_ctx_t *out_ctx);
 
 typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
     const char *format;
     const char *format_above_threshold;
-    const float max_threshold;
+    float max_threshold;
 } load_ctx_t;
 
-void print_load(load_ctx_t *ctx);
+void print_load(load_ctx_t *ctx, output_ctx_t *out_ctx);
 
 typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
     const char *format;
     const char *format_degraded;
     const char *threshold_degraded;
     const char *threshold_critical;
     const char *memory_used_method;
     const char *unit;
-    const int decimals;
+    int decimals;
 } memory_ctx_t;
 
-void print_memory(memory_ctx_t *ctx);
+void print_memory(memory_ctx_t *ctx, output_ctx_t *out_ctx);
 
 typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
     const char *fmt;
     const char *fmt_muted;
     const char *device;
@@ -262,28 +238,72 @@ typedef struct {
     int mixer_idx;
 } volume_ctx_t;
 
-void print_volume(volume_ctx_t *ctx);
+void print_volume(volume_ctx_t *ctx, output_ctx_t *out_ctx);
 
-bool process_runs(const char *path);
 int volume_pulseaudio(uint32_t sink_idx, const char *sink_name);
 bool description_pulseaudio(uint32_t sink_idx, const char *sink_name, char buffer[MAX_SINK_DESCRIPTION_LEN]);
 bool pulse_initialize(void);
 
+/* config */
+
+typedef enum {
+    ITEM_IPV6,
+    ITEM_WIRELESS,
+    ITEM_ETHERNET,
+    ITEM_BATTERY,
+    ITEM_LOAD,
+    ITEM_MEMORY,
+    ITEM_TZTIME,
+    ITEM_VOLUME,
+    ITEM_CPU_TEMPERATURE,
+    ITEM_CPU_USAGE,
+} item_type_t;
+
 typedef struct {
-    yajl_gen json_gen;
-    char *buf;
-    const size_t buflen;
-    const char *title;
-    const char *path;
-    const char *format;
-    const char *format_bad;
-    const int max_chars;
-} file_contents_ctx_t;
+    item_type_t type;
+    union {
+        ipv6_info_ctx_t ipv6;
+        wireless_info_ctx_t wireless;
+        eth_info_ctx_t ethernet;
+        battery_info_ctx_t battery;
+        load_ctx_t load;
+        memory_ctx_t memory;
+        time_ctx_t tztime;
+        volume_ctx_t volume;
+        cpu_temperature_ctx_t cpu_temperature;
+        cpu_usage_ctx_t cpu_usage;
+    } ctx;
+} status_item_t;
+
+typedef struct {
+    char good[8];
+    char degraded[8];
+    char bad[8];
+} color_opts_t;
+
+typedef struct {
+    color_opts_t color_opts;
+    const char *separator;
+    char color_separator[8];
+    unsigned int interval;
+    bool colors;
+} general_opts_t;
+
+typedef struct {
+    general_opts_t general;
+    status_item_t *items;
+    unsigned int item_count;
+} config_t;
+
+int config_parse(const char *filename, config_t *output);
 
 /* socket file descriptor for general purposes */
 extern int general_socket;
 
-extern cfg_t *cfg, *cfg_general, *cfg_section;
+extern general_opts_t *general_cfg;
 
 extern pthread_t main_thread;
+
+extern const size_t PLUGIN_BUF_LEN;
+
 #endif

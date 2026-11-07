@@ -27,7 +27,7 @@
     if ((err = snd_mixer_selem_get_##channel##_switch(elem, 0, &pbval)) < 0)             \
         fprintf(stderr, "i3status: ALSA: " #channel "_switch: %s\n", snd_strerror(err)); \
     if (!pbval) {                                                                        \
-        START_COLOR("color_degraded");                                                   \
+        START_COLOR(degraded);                                                   \
         ctx->fmt = ctx->fmt_muted;                                                       \
     }
 
@@ -45,8 +45,8 @@ static char *apply_volume_format(const char *fmt, int ivolume, const char *devic
     return format_placeholders(fmt, &placeholders[0], num);
 }
 
-void print_volume(volume_ctx_t *ctx) {
-    char *outwalk = ctx->buf;
+void print_volume(volume_ctx_t *ctx, output_ctx_t *out_ctx) {
+    char *outwalk = out_ctx->buf;
     int pbval = 1;
 
     /* Printing volume works with ALSA and PulseAudio at the moment */
@@ -80,7 +80,7 @@ void print_volume(volume_ctx_t *ctx) {
         int ivolume = DECOMPOSE_VOLUME(cvolume);
         bool muted = DECOMPOSE_MUTED(cvolume);
         if (muted) {
-            START_COLOR("color_degraded");
+            START_COLOR(degraded);
             pbval = 0;
         }
 
@@ -102,7 +102,7 @@ void print_volume(volume_ctx_t *ctx) {
         bool muted = DECOMPOSE_MUTED(cvolume);
         if (ivolume >= 0 && success) {
             if (muted) {
-                START_COLOR("color_degraded");
+                START_COLOR(degraded);
                 pbval = 0;
             }
             char *formatted = apply_volume_format(muted ? ctx->fmt_muted : ctx->fmt,
@@ -219,5 +219,5 @@ void print_volume(volume_ctx_t *ctx) {
     goto out;
 
 out:
-    OUTPUT_FULL_TEXT(ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx->buf);
 }

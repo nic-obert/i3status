@@ -46,7 +46,7 @@ static int print_eth_speed(char *outwalk, const char *interface) {
  * Combines ethernet IP addresses and speed (if requested) for displaying
  *
  * Table summarizing what is the decision to prefer IPv4 or IPv6
- * based their values.
+ * based on their values.
  *
  * | ipv4_address | ipv6_address | Chosen IP | Color             |
  * |--------------|--------------|-----------|-------------------|
@@ -60,10 +60,19 @@ static int print_eth_speed(char *outwalk, const char *interface) {
  * | 127.0.0.1    | no IP        | IPv4      | ok                |
  * | 127.0.0.1    | ::1/128      | IPv4      | ok                |
  */
-void print_eth_info(eth_info_ctx_t *ctx) {
+void print_eth_info(eth_info_ctx_t *ctx, output_ctx_t *out_ctx) {
+
+    char *outwalk = out_ctx->buf;
+
+    if (ctx->interface == NULL) {
+        START_COLOR(bad);
+        outwalk += sprintf(out_ctx->buf, "%s", ctx->format_down);
+        OUTPUT_FULL_TEXT(out_ctx->buf);
+        return;
+    }
+
     const char *format = ctx->format_down;  // default format
 
-    char *outwalk = ctx->buf;
     size_t num = 0;
 
     INSTANCE(ctx->interface);
@@ -85,7 +94,7 @@ void print_eth_info(eth_info_ctx_t *ctx) {
     bool prefer_ipv4 = true;
     if (ipv4_address == NULL) {
         if (ipv6_address == NULL) {
-            START_COLOR("color_bad");
+            START_COLOR(bad);
             goto out;
         } else {
             prefer_ipv4 = false;
@@ -98,9 +107,9 @@ void print_eth_info(eth_info_ctx_t *ctx) {
 
     const char *ip_address = (prefer_ipv4) ? ipv4_address : ipv6_address;
     if (BEGINS_WITH(ip_address, "no IP")) {
-        START_COLOR("color_degraded");
+        START_COLOR(degraded);
     } else {
-        START_COLOR("color_good");
+        START_COLOR(good);
     }
 
     char string_ip[STRING_SIZE];
@@ -121,6 +130,6 @@ out : {
     free(formatted);
     free(ipv4_address);
     free(ipv6_address);
-    OUTPUT_FULL_TEXT(ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx->buf);
 }
 }

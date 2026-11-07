@@ -1,6 +1,7 @@
 #include <sys/socket.h>
 #include <stdlib.h>
 #include <ifaddrs.h>
+#include <stdio.h>
 
 #include "i3status.h"
 
@@ -71,7 +72,7 @@ static net_type_t iface_type(const char *ifname) {
     return NET_TYPE_OTHER;
 }
 
-const char *first_eth_interface(const net_type_t type) {
+const char *first_net_interface(const net_type_t type) {
     static char *interface = NULL;
     struct ifaddrs *ifaddr, *addrp;
     net_type_t iftype;
@@ -83,9 +84,7 @@ const char *first_eth_interface(const net_type_t type) {
 
     free(interface);
     interface = NULL;
-    for (addrp = ifaddr;
-         addrp != NULL;
-         addrp = addrp->ifa_next) {
+    for (addrp = ifaddr; addrp != NULL; addrp = addrp->ifa_next) {
         if (strncasecmp(LOOPBACK_DEV, addrp->ifa_name, strlen(LOOPBACK_DEV)) == 0)
             continue;
         if (addrp->ifa_addr == NULL)

@@ -9,10 +9,12 @@ every second. This ensures that even under high load, your status bar is updated
 correctly. Also, it saves a bit of energy by not hogging your CPU as much as
 spawning the corresponding amount of shell commands would.
 
+Configuration files are JSON and are parsed with YAJL. See the man page for the
+JSON schema and default configuration search paths.
+
 ## Development
 
 i3status has the following dependencies:
-  * libconfuse-dev
   * libyajl-dev
   * libasound2-dev
   * libnl-genl-3-dev
@@ -22,7 +24,7 @@ i3status has the following dependencies:
 
 On debian-based systems, the following line will install all requirements:
 ```bash
-apt-get install autoconf libconfuse-dev libyajl-dev libasound2-dev libiw-dev asciidoc libpulse-dev libnl-genl-3-dev meson
+apt-get install autoconf libyajl-dev libasound2-dev libiw-dev asciidoc libpulse-dev libnl-genl-3-dev meson
 ```
 
 ## Upstream

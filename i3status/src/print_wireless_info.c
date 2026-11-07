@@ -284,7 +284,7 @@ error1:
 }
 
 /* Table summarizing what is the decision to prefer IPv4 or IPv6
- * based their values.
+ * based on their values.
  *
  * | ipv4_address | ipv6_address | Chosen IP | Color             |
  * |--------------|--------------|-----------|-------------------|
@@ -298,9 +298,18 @@ error1:
  * | 127.0.0.1    | no IP        | IPv4      | ok                |
  * | 127.0.0.1    | ::1/128      | IPv4      | ok                |
  */
-void print_wireless_info(wireless_info_ctx_t *ctx) {
+void print_wireless_info(wireless_info_ctx_t *ctx, output_ctx_t *out_ctx) {
+
+    char *outwalk = out_ctx->buf;
+    
+    if (ctx->interface == NULL) {
+        START_COLOR(bad);
+        outwalk += sprintf(out_ctx->buf, "%s", ctx->format_down);
+        OUTPUT_FULL_TEXT(out_ctx->buf);
+        return;
+    }
+
     const char *walk;
-    char *outwalk = ctx->buf;
     wireless_info_t info;
 
     INSTANCE(ctx->interface);
@@ -322,12 +331,12 @@ void print_wireless_info(wireless_info_ctx_t *ctx) {
     bool prefer_ipv4 = true;
     if (ipv4_address == NULL) {
         if (ipv6_address == NULL) {
-            START_COLOR("color_bad");
+            START_COLOR(bad);
             outwalk += sprintf(outwalk, "%s", ctx->format_down);
 
             free(ipv4_address);
             free(ipv6_address);
-            OUTPUT_FULL_TEXT(ctx->buf);
+            OUTPUT_FULL_TEXT(out_ctx->buf);
             return;
         } else {
             prefer_ipv4 = false;
@@ -339,16 +348,18 @@ void print_wireless_info(wireless_info_ctx_t *ctx) {
     const char *ip_address = (prefer_ipv4) ? ipv4_address : ipv6_address;
     if (!get_wireless_info(ctx->interface, &info)) {
         walk = ctx->format_down;
-        START_COLOR("color_bad");
+        START_COLOR(bad);
     } else {
         walk = ctx->format_up;
-        if (info.flags & WIRELESS_INFO_FLAG_HAS_QUALITY)
-            START_COLOR((info.quality < info.quality_average ? "color_degraded" : "color_good"));
+        if (info.flags & WIRELESS_INFO_FLAG_HAS_QUALITY) {
+            const char* color = info.quality < info.quality_average ? general_cfg->color_opts.degraded : general_cfg->color_opts.good;
+            START_COLOR_VAR(color);
+        }
         else {
             if (BEGINS_WITH(ip_address, "no IP")) {
-                START_COLOR("color_degraded");
+                START_COLOR(degraded);
             } else {
-                START_COLOR("color_good");
+                START_COLOR(good);
             }
         }
     }
@@ -418,5 +429,5 @@ void print_wireless_info(wireless_info_ctx_t *ctx) {
 
     free(ipv4_address);
     free(ipv6_address);
-    OUTPUT_FULL_TEXT(ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx->buf);
 }
