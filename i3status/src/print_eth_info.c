@@ -60,7 +60,7 @@ static int print_eth_speed(char *outwalk, const char *interface) {
  * | 127.0.0.1    | no IP        | IPv4      | ok                |
  * | 127.0.0.1    | ::1/128      | IPv4      | ok                |
  */
-void print_eth_info(eth_info_ctx_t *ctx, output_ctx_t *out_ctx) {
+void print_eth_info(eth_info_ctx_t *ctx, output_ctx_t *out_ctx, const struct ifaddrs *ifaddr) {
 
     char *outwalk = out_ctx->buf;
 
@@ -77,8 +77,9 @@ void print_eth_info(eth_info_ctx_t *ctx, output_ctx_t *out_ctx) {
 
     INSTANCE(ctx->interface);
 
-    char *ipv4_address = sstrdup(get_ip_addr(ctx->interface, AF_INET));
-    char *ipv6_address = sstrdup(get_ip_addr(ctx->interface, AF_INET6));
+    ip_addr_t addresses = get_ip_addr_ipv4_ipv6(ctx->interface, ifaddr);
+    char *ipv4_address = addresses.ipv4_address;
+    char *ipv6_address = addresses.ipv6_address;
 
     /*
      * Removing '%' and following characters from IPv6 since the interface identifier is redundant,

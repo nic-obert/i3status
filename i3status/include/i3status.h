@@ -9,6 +9,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <ifaddrs.h>
 
 
 #define BEGINS_WITH(haystack, needle) (strncmp(haystack, needle, strlen(needle)) == 0)
@@ -120,7 +121,7 @@ typedef enum {
     NET_TYPE_ETHERNET = 1,
     NET_TYPE_OTHER = 2
 } net_type_t;
-const char *first_net_interface(const net_type_t type);
+const char *first_net_interface(const net_type_t type, const struct ifaddrs *ifaddr);
 
 typedef struct {
     const char *format_up;
@@ -165,7 +166,12 @@ typedef struct {
 
 void print_time(time_ctx_t *ctx, output_ctx_t *out_ctx);
 
-const char *get_ip_addr(const char *interface, int family);
+typedef struct {
+    char *ipv4_address;
+    char *ipv6_address;
+} ip_addr_t;
+
+ip_addr_t get_ip_addr_ipv4_ipv6(const char *interface, const struct ifaddrs *ifaddr);
 
 typedef struct {
     const char *interface;
@@ -178,7 +184,8 @@ typedef struct {
     bool use_first;
 } wireless_info_ctx_t;
 
-void print_wireless_info(wireless_info_ctx_t *ctx, output_ctx_t *out_ctx);
+void print_wireless_info(wireless_info_ctx_t *ctx, output_ctx_t *out_ctx, const struct ifaddrs *ifaddr);
+void free_wireless_info_cache(void);
 
 typedef struct {
     const char *path;
@@ -208,7 +215,7 @@ typedef struct {
     bool use_first;
 } eth_info_ctx_t;
 
-void print_eth_info(eth_info_ctx_t *ctx, output_ctx_t *out_ctx);
+void print_eth_info(eth_info_ctx_t *ctx, output_ctx_t *out_ctx, const struct ifaddrs *ifaddr);
 
 typedef struct {
     const char *format;

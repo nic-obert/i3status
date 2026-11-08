@@ -11,93 +11,82 @@
 
 #include "i3status.h"
 
+
 /*
- * Return a copy of the .ifa_name field passed as argument where the optional
- * IP label, if present, is removed.
- *
- * example:
- * - strip_optional_label("eth0") => "eth0"
- * - strip_optional_label("eth0:label") => "eth0"
- *
- * The memory for the returned string is obtained with malloc(3), and can be
- * freed with free(3).
- *
- *
- */
-static char *strip_optional_label(const char *ifa_name) {
-    char *copy = sstrdup(ifa_name);
+    Match a string with an optional label suffix.
+    Example:
+    "eth0:label","eth0" -> true
+    "eth0","eth0" -> true
+    "wlan0","eth0" -> false 
+*/
+static bool interface_names_match(const char *ifa_name, const char *interface, size_t interface_len) {
 
-    char *ptr = strchr(copy, ':');
-
-    if (ptr) {
-        *ptr = '\0';
-    }
-
-    return copy;
+    // Check if `ifa_name` begins with `interface`
+    if (strncmp(ifa_name, interface, interface_len) != 0)
+        return false;
+    
+    // If the first part of `ifa_name` matches, ensure there are no more characters
+    char final_char = ifa_name[interface_len];
+    return final_char == '\0' || final_char == ':';
 }
 
+
 /*
- * Return the IP address for the given interface or "no IP" if the
- * interface is up and running but hasn't got an IP address yet
- *
+ * Return the IPv4 and IPv6 addresses for the given interface. An address is
+ * NULL if the interface does not exist, or "no IP" if the interface is up
+ * and running but has no address of that family.
  */
-const char *get_ip_addr(const char *interface, int family) {
-    static char part[512];
-    socklen_t len = 0;
-    if (family == AF_INET)
-        len = sizeof(struct sockaddr_in);
-    else if (family == AF_INET6)
-        len = sizeof(struct sockaddr_in6);
-
-    memset(part, 0, sizeof(part));
-
-    struct ifaddrs *ifaddr, *addrp;
+ip_addr_t get_ip_addr_ipv4_ipv6(const char *interface, const struct ifaddrs *ifaddr) {
+    ip_addr_t result = {NULL, NULL};
+    struct ifaddrs *addrp;
     bool found = false;
-
-    getifaddrs(&ifaddr);
+    bool down = false;
+    size_t interface_len = strlen(interface);
 
     if (ifaddr == NULL)
-        return NULL;
+        return result;
 
-    /* Skip until we are at the input family address of interface */
     for (addrp = ifaddr; addrp != NULL; addrp = addrp->ifa_next) {
-        /* Strip the label if present in the .ifa_name field. */
-        char *stripped_ifa_name = strip_optional_label(addrp->ifa_name);
-
-        bool name_matches = strcmp(stripped_ifa_name, interface) != 0;
-        free(stripped_ifa_name);
-        if (name_matches) {
+        if (!interface_names_match(addrp->ifa_name, interface, interface_len)) {
             /* The interface does not have the right name, skip it. */
             continue;
         }
 
-        if (addrp->ifa_addr != NULL && addrp->ifa_addr->sa_family == family) {
-            /* We found the right interface with the right address. */
-            break;
-        }
-
-        /* Check if the interface is down. If it is, no need to look any
-         * further. */
-        if ((addrp->ifa_flags & IFF_RUNNING) == 0) {
-            freeifaddrs(ifaddr);
-            return NULL;
-        }
-
         found = true;
+        down |= (addrp->ifa_flags & IFF_RUNNING) == 0;
+
+        if (addrp->ifa_addr == NULL)
+            continue;
+
+        int family = addrp->ifa_addr->sa_family;
+        char **address = NULL;
+        socklen_t len = 0;
+        if (family == AF_INET && result.ipv4_address == NULL) {
+            address = &result.ipv4_address;
+            len = sizeof(struct sockaddr_in);
+        } else if (family == AF_INET6 && result.ipv6_address == NULL) {
+            address = &result.ipv6_address;
+            len = sizeof(struct sockaddr_in6);
+        }
+
+        if (address != NULL) {
+            char part[512] = {0};
+            int ret = getnameinfo(addrp->ifa_addr, len, part, sizeof(part), NULL, 0, NI_NUMERICHOST);
+            if (ret != 0) {
+                fprintf(stderr, "i3status: getnameinfo(): %s\n", gai_strerror(ret));
+                *address = sstrdup("no IP");
+            } else {
+                *address = sstrdup(part);
+            }
+        }
     }
 
-    if (addrp == NULL) {
-        freeifaddrs(ifaddr);
-        return (found ? "no IP" : NULL);
+    if (found && !down) {
+        if (result.ipv4_address == NULL)
+            result.ipv4_address = sstrdup("no IP");
+        if (result.ipv6_address == NULL)
+            result.ipv6_address = sstrdup("no IP");
     }
 
-    int ret;
-    if ((ret = getnameinfo(addrp->ifa_addr, len, part, sizeof(part), NULL, 0, NI_NUMERICHOST)) != 0) {
-        fprintf(stderr, "i3status: getnameinfo(): %s\n", gai_strerror(ret));
-        freeifaddrs(ifaddr);
-        return "no IP";
-    }
-
-    freeifaddrs(ifaddr);
-    return part;
+    return result;
 }

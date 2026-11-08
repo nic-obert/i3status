@@ -38,7 +38,47 @@ typedef struct {
     int noise_level_max;
     long int bitrate;
     double frequency;
-} wireless_info_t;
+} wireless_info_t; // TODO: review alignment and packing
+
+typedef struct {
+    struct nl_sock *socket;
+    int nl80211_id;
+} wireless_nl_cache_t;
+
+static wireless_nl_cache_t nl_cache;
+
+static void invalidate_nl_cache(void) {
+    // Safety: `nl_socket_free(NULL)` is expected to be safe in libnl
+    nl_socket_free(nl_cache.socket);
+    nl_cache.socket = NULL;
+    nl_cache.nl80211_id = -1;
+}
+
+void free_wireless_info_cache(void) {
+    invalidate_nl_cache();
+}
+
+static bool initialize_nl_cache(void) {
+    if (nl_cache.socket != NULL)
+        return true;
+
+    nl_cache.socket = nl_socket_alloc();
+    if (nl_cache.socket == NULL)
+        return false;
+
+    if (genl_connect(nl_cache.socket) != 0) {
+        invalidate_nl_cache();
+        return false;
+    }
+
+    nl_cache.nl80211_id = genl_ctrl_resolve(nl_cache.socket, "nl80211");
+    if (nl_cache.nl80211_id < 0) {
+        invalidate_nl_cache();
+        return false;
+    }
+
+    return true;
+}
 
 // Like iw_print_bitrate, but without the dependency on libiw.
 static void print_bitrate(char *buffer, int buflen, long int bitrate, const char *format_bitrate) {
@@ -228,55 +268,68 @@ static int gwi_scan_cb(struct nl_msg *msg, void *data) {
 static int get_wireless_info(const char *interface, wireless_info_t *info) {
     memset(info, 0, sizeof(wireless_info_t));
 
-    struct nl_sock *sk = nl_socket_alloc();
-    if (genl_connect(sk) != 0)
-        goto error1;
+    /*
+     * Query the kernel's nl80211 generic-netlink interface. The scan request
+     * identifies the currently associated BSSID and supplies the ESSID,
+     * frequency, signal strength, and link-quality data. The station request
+     * then uses that BSSID to obtain the receive bitrate.
+     */
+    if (!initialize_nl_cache())
+        return 0;
 
-    if (nl_socket_modify_cb(sk, NL_CB_VALID, NL_CB_CUSTOM, gwi_scan_cb, info) < 0)
-        goto error1;
+    struct nl_sock *sk = nl_cache.socket;
+    const int nl80211_id = nl_cache.nl80211_id;
 
-    const int nl80211_id = genl_ctrl_resolve(sk, "nl80211");
-    if (nl80211_id < 0)
-        goto error1;
+    if (nl_socket_modify_cb(sk, NL_CB_VALID, NL_CB_CUSTOM, gwi_scan_cb, info) < 0) {
+        invalidate_nl_cache();
+        return 0;
+    }
 
     const unsigned int ifidx = if_nametoindex(interface);
     if (ifidx == 0)
-        goto error1;
+        return 0;
 
     struct nl_msg *msg = NULL;
+
+    /* Dump scan results; gwi_scan_cb keeps only the associated network. */
     if ((msg = nlmsg_alloc()) == NULL)
-        goto error1;
+        return 0;
 
     if (!genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, nl80211_id, 0, NLM_F_DUMP, NL80211_CMD_GET_SCAN, 0) ||
         nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifidx) < 0)
         goto error2;
 
-    if (nl_send_sync(sk, msg) < 0)
+    if (nl_send_sync(sk, msg) < 0) {
         // nl_send_sync calls nlmsg_free()
-        goto error1;
+        invalidate_nl_cache();
+        return 0;
+    }
     msg = NULL;
 
-    if (nl_socket_modify_cb(sk, NL_CB_VALID, NL_CB_CUSTOM, gwi_sta_cb, info) < 0)
-        goto error1;
+    if (nl_socket_modify_cb(sk, NL_CB_VALID, NL_CB_CUSTOM, gwi_sta_cb, info) < 0) {
+        invalidate_nl_cache();
+        return 0;
+    }
 
+    /* Query station statistics for the BSSID found in the scan response. */
     if ((msg = nlmsg_alloc()) == NULL)
-        goto error1;
+        return 0;
 
     if (!genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, nl80211_id, 0, NLM_F_DUMP, NL80211_CMD_GET_STATION, 0) || nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifidx) < 0 || nla_put(msg, NL80211_ATTR_MAC, 6, info->bssid) < 0)
         goto error2;
 
-    if (nl_send_sync(sk, msg) < 0)
+    if (nl_send_sync(sk, msg) < 0) {
         // nl_send_sync calls nlmsg_free()
-        goto error1;
+        invalidate_nl_cache();
+        return 0;
+    }
     msg = NULL;
 
-    nl_socket_free(sk);
     return 1;
 
 error2:
+    /* msg is still owned by this function on message-construction errors. */
     nlmsg_free(msg);
-error1:
-    nl_socket_free(sk);
     return 0;
 }
 
@@ -295,7 +348,7 @@ error1:
  * | 127.0.0.1    | no IP        | IPv4      | ok                |
  * | 127.0.0.1    | ::1/128      | IPv4      | ok                |
  */
-void print_wireless_info(wireless_info_ctx_t *ctx, output_ctx_t *out_ctx) {
+void print_wireless_info(wireless_info_ctx_t *ctx, output_ctx_t *out_ctx, const struct ifaddrs *ifaddr) {
 
     char *outwalk = out_ctx->buf;
     
@@ -311,8 +364,9 @@ void print_wireless_info(wireless_info_ctx_t *ctx, output_ctx_t *out_ctx) {
 
     INSTANCE(ctx->interface);
 
-    char *ipv4_address = sstrdup(get_ip_addr(ctx->interface, AF_INET));
-    char *ipv6_address = sstrdup(get_ip_addr(ctx->interface, AF_INET6));
+    ip_addr_t addresses = get_ip_addr_ipv4_ipv6(ctx->interface, ifaddr);
+    char *ipv4_address = addresses.ipv4_address;
+    char *ipv6_address = addresses.ipv6_address;
 
     /*
      * Removing '%' and following characters from IPv6 since the interface identifier is redundant,

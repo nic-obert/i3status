@@ -47,9 +47,9 @@ static bool is_virtual(const char *ifname) {
         if (BEGINS_WITH(target, "/sys/devices/virtual/")) {
             is_virtual = true;
         }
+        free(target);
     }
 
-    free(target);
     return is_virtual;
 }
 
@@ -72,38 +72,32 @@ static net_type_t iface_type(const char *ifname) {
     return NET_TYPE_OTHER;
 }
 
-const char *first_net_interface(const net_type_t type) {
-    static char *interface = NULL;
-    struct ifaddrs *ifaddr, *addrp;
+
+/*
+    Return the first network interface of the requested type among the given list of interfaces.    
+*/
+const char *first_net_interface(const net_type_t type, const struct ifaddrs *ifaddr) {
+    struct ifaddrs *addrp;
     net_type_t iftype;
 
-    getifaddrs(&ifaddr);
-
-    if (ifaddr == NULL)
-        return NULL;
-
-    free(interface);
-    interface = NULL;
     for (addrp = ifaddr; addrp != NULL; addrp = addrp->ifa_next) {
         if (strncasecmp(LOOPBACK_DEV, addrp->ifa_name, strlen(LOOPBACK_DEV)) == 0)
             continue;
         if (addrp->ifa_addr == NULL)
             continue;
-        // Skip PF_PACKET addresses (MAC addresses), as they are present on any
-        // ethernet interface.
+        // Skip AF_PACKET addresses (MAC addresses), as they are present on any interface.
         if (addrp->ifa_addr->sa_family != AF_INET &&
             addrp->ifa_addr->sa_family != AF_INET6)
             continue;
-        // Skip this interface if it is a wireless interface.
+        // Skip this interface if it's not the requested type.
         iftype = iface_type(addrp->ifa_name);
         if (iftype != type)
             continue;
         if (is_virtual(addrp->ifa_name))
             continue;
-        interface = strdup(addrp->ifa_name);
-        break;
+
+        return addrp->ifa_name;
     }
 
-    freeifaddrs(ifaddr);
-    return interface;
+    return NULL;
 }

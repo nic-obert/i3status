@@ -23,6 +23,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <locale.h>
+#include <ifaddrs.h>
 
 #include <yajl/yajl_gen.h>
 #include <yajl/yajl_version.h>
@@ -213,15 +214,38 @@ int main(int argc, char *argv[]) {
         .json_gen = json_gen
     };
 
+    // Check if we will query network interfaces that can share state within the same iteration
+    bool share_ifaddrs = false;
+    for (int j = 0; j < cfg.item_count; j++) {
+        status_item_t *item = &cfg.items[j];
+        switch (item->type) {
+            case ITEM_WIRELESS:
+            case ITEM_ETHERNET:
+                share_ifaddrs = true;
+                break;
+        }
+    }
+
+    // Shared state
+    struct ifaddrs *shared_ifaddrs = NULL;
+
     while (1) {
         if (exit_upon_signal) {
             fprintf(stderr, "i3status: exiting due to signal.\n");
-            exit(1);
+            break;
         }
+
         struct timeval tv;
         gettimeofday(&tv, NULL);
+
         yajl_gen_array_open(json_gen);
-        for (unsigned int j = 0; j < cfg.item_count; j++) {
+
+        if (share_ifaddrs) {
+            if (shared_ifaddrs) freeifaddrs(shared_ifaddrs);
+            if (getifaddrs(&shared_ifaddrs) != 0) shared_ifaddrs = NULL;
+        }
+
+        for (int j = 0; j < cfg.item_count; j++) {
             status_item_t *item = &cfg.items[j];
 
             switch (item->type) {
@@ -233,17 +257,17 @@ int main(int argc, char *argv[]) {
 
             case ITEM_WIRELESS:
                 if (item->ctx.wireless.use_first)
-                    item->ctx.wireless.interface = first_net_interface(NET_TYPE_WIRELESS);
+                    item->ctx.wireless.interface = first_net_interface(NET_TYPE_WIRELESS, shared_ifaddrs); // TODO: we should move the call to `first_net_interface` into the printing function
                 SEC_OPEN_MAP("wireless");
-                print_wireless_info(&item->ctx.wireless, &out_ctx);
+                print_wireless_info(&item->ctx.wireless, &out_ctx, shared_ifaddrs);
                 SEC_CLOSE_MAP;
                 break;
 
             case ITEM_ETHERNET:
                 if (item->ctx.ethernet.use_first)
-                    item->ctx.ethernet.interface = first_net_interface(NET_TYPE_ETHERNET);
+                    item->ctx.ethernet.interface = first_net_interface(NET_TYPE_ETHERNET, shared_ifaddrs);
                 SEC_OPEN_MAP("ethernet");
-                print_eth_info(&item->ctx.ethernet, &out_ctx);
+                print_eth_info(&item->ctx.ethernet, &out_ctx, shared_ifaddrs);
                 SEC_CLOSE_MAP;
                 break;
 
@@ -312,5 +336,15 @@ int main(int argc, char *argv[]) {
         nanosleep(&ts, NULL);
     }
 
+    // Free long-standing resources and caches
     yajl_gen_free(json_gen);
+    if (shared_ifaddrs) {
+        freeifaddrs(shared_ifaddrs);
+        shared_ifaddrs = NULL;
+    }
+    free_wireless_info_cache();
+
+    if (exit_upon_signal)
+        return 1;
+    return 0;
 }
