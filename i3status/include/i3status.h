@@ -30,8 +30,8 @@
         /* Terminate the output buffer here in any case, so that it’s                                \
          * not forgotten in the module */                                                            \
         *outwalk = '\0';                                                                             \
-        yajl_gen_string(out_ctx->json_gen, (const unsigned char *)"full_text", strlen("full_text")); \
-        yajl_gen_string(out_ctx->json_gen, (const unsigned char *)text, strlen(text));               \
+        yajl_gen_string(out_ctx.json_gen, (const unsigned char *)"full_text", strlen("full_text")); \
+        yajl_gen_string(out_ctx.json_gen, (const unsigned char *)text, strlen(text));               \
     } while (0)
 
 #define SEC_OPEN_MAP(name)                                                            \
@@ -53,28 +53,28 @@
 #define START_COLOR_VAR(color)                                                                   \
     do {                                                                                         \
         if (general_cfg->colors) {                                                               \
-            yajl_gen_string(out_ctx->json_gen, (const unsigned char *)"color", strlen("color")); \
-            yajl_gen_string(out_ctx->json_gen, (const unsigned char *)color, strlen(color));     \
+            yajl_gen_string(out_ctx.json_gen, (const unsigned char *)"color", strlen("color")); \
+            yajl_gen_string(out_ctx.json_gen, (const unsigned char *)color, strlen(color));     \
         }                                                                                        \
     } while (0)
 
 #define START_COLOR(color)                                                                       \
     do {                                                                                         \
         if (general_cfg->colors) {                                                               \
-            yajl_gen_string(out_ctx->json_gen, (const unsigned char *)"color", strlen("color")); \
-            yajl_gen_string(out_ctx->json_gen, (const unsigned char *)general_cfg->color_opts.color, strlen(general_cfg->color_opts.color));       \
+            yajl_gen_string(out_ctx.json_gen, (const unsigned char *)"color", strlen("color")); \
+            yajl_gen_string(out_ctx.json_gen, (const unsigned char *)general_cfg->color_opts.color, strlen(general_cfg->color_opts.color));       \
         }                                                                                        \
     } while (0)
 
 #define INSTANCE(instance)                                                                         \
     do {                                                                                           \
-        yajl_gen_string(out_ctx->json_gen, (const unsigned char *)"instance", strlen("instance")); \
-        yajl_gen_string(out_ctx->json_gen, (const unsigned char *)instance, strlen(instance));     \
+        yajl_gen_string(out_ctx.json_gen, (const unsigned char *)"instance", strlen("instance")); \
+        yajl_gen_string(out_ctx.json_gen, (const unsigned char *)instance, strlen(instance));     \
     } while (0)
 
 #define OUTPUT_FORMATTED                                             \
     do {                                                             \
-        const size_t remaining = PLUGIN_BUF_LEN - (outwalk - out_ctx->buf); \
+        const size_t remaining = PLUGIN_BUF_LEN - (outwalk - out_ctx.buf); \
         strncpy(outwalk, formatted, remaining);                      \
         outwalk += strlen(formatted);                                \
     } while (0)
@@ -84,6 +84,8 @@ typedef struct {
     yajl_gen json_gen;
     char* buf;
 } output_ctx_t;
+
+extern output_ctx_t out_ctx;
 
 /* src/general.c */
 char *skip_character(char *input, char character, int amount);
@@ -121,14 +123,14 @@ typedef enum {
     NET_TYPE_ETHERNET = 1,
     NET_TYPE_OTHER = 2
 } net_type_t;
-const char *first_net_interface(const net_type_t type, const struct ifaddrs *ifaddr);
+void cache_first_network_interfaces(bool ethernet, bool wireless);
 
 typedef struct {
     const char *format_up;
     const char *format_down;
 } ipv6_info_ctx_t;
 
-void print_ipv6_info(ipv6_info_ctx_t *ctx, output_ctx_t *out_ctx);
+void print_ipv6_info(ipv6_info_ctx_t *ctx);
 
 typedef enum : uint8_t {
     PERCENTAGE,
@@ -150,9 +152,12 @@ typedef struct {
     uint8_t low_threshold;
     bool last_full_capacity;
     bool hide_seconds;
+    char **battery_paths;
+    size_t battery_path_count;
+    time_t battery_paths_refreshed;
 } battery_info_ctx_t;
 
-void print_battery_info(battery_info_ctx_t *ctx, output_ctx_t *out_ctx);
+void print_battery_info(battery_info_ctx_t *ctx);
 
 typedef struct {
     const char *title;
@@ -164,14 +169,14 @@ typedef struct {
     bool hide_if_equals_localtime;
 } time_ctx_t;
 
-void print_time(time_ctx_t *ctx, output_ctx_t *out_ctx);
+void print_time(time_ctx_t *ctx);
 
 typedef struct {
     char *ipv4_address;
     char *ipv6_address;
 } ip_addr_t;
 
-ip_addr_t get_ip_addr_ipv4_ipv6(const char *interface, const struct ifaddrs *ifaddr);
+ip_addr_t get_ip_addr_ipv4_ipv6(const char *interface);
 
 typedef struct {
     const char *interface;
@@ -184,7 +189,7 @@ typedef struct {
     bool use_first;
 } wireless_info_ctx_t;
 
-void print_wireless_info(wireless_info_ctx_t *ctx, output_ctx_t *out_ctx, const struct ifaddrs *ifaddr);
+void print_wireless_info(wireless_info_ctx_t *ctx);
 void free_wireless_info_cache(void);
 
 typedef struct {
@@ -195,7 +200,7 @@ typedef struct {
     int max_threshold;
 } cpu_temperature_ctx_t;
 
-void print_cpu_temperature_info(cpu_temperature_ctx_t *ctx, output_ctx_t *out_ctx);
+void print_cpu_temperature_info(cpu_temperature_ctx_t *ctx);
 
 typedef struct {
     const char *format;
@@ -206,7 +211,7 @@ typedef struct {
     float degraded_threshold;
 } cpu_usage_ctx_t;
 
-void print_cpu_usage(cpu_usage_ctx_t *ctx, output_ctx_t *out_ctx);
+void print_cpu_usage(cpu_usage_ctx_t *ctx);
 
 typedef struct {
     const char *interface;
@@ -215,7 +220,7 @@ typedef struct {
     bool use_first;
 } eth_info_ctx_t;
 
-void print_eth_info(eth_info_ctx_t *ctx, output_ctx_t *out_ctx, const struct ifaddrs *ifaddr);
+void print_eth_info(eth_info_ctx_t *ctx);
 
 typedef struct {
     const char *format;
@@ -223,7 +228,7 @@ typedef struct {
     float max_threshold;
 } load_ctx_t;
 
-void print_load(load_ctx_t *ctx, output_ctx_t *out_ctx);
+void print_load(load_ctx_t *ctx);
 
 typedef struct {
     const char *format;
@@ -235,7 +240,7 @@ typedef struct {
     int decimals;
 } memory_ctx_t;
 
-void print_memory(memory_ctx_t *ctx, output_ctx_t *out_ctx);
+void print_memory(memory_ctx_t *ctx);
 
 typedef struct {
     const char *fmt;
@@ -245,7 +250,7 @@ typedef struct {
     int mixer_idx;
 } volume_ctx_t;
 
-void print_volume(volume_ctx_t *ctx, output_ctx_t *out_ctx);
+void print_volume(volume_ctx_t *ctx);
 
 int volume_pulseaudio(uint32_t sink_idx, const char *sink_name);
 bool description_pulseaudio(uint32_t sink_idx, const char *sink_name, char buffer[MAX_SINK_DESCRIPTION_LEN]);
@@ -312,5 +317,14 @@ extern general_opts_t *general_cfg;
 extern pthread_t main_thread;
 
 extern const size_t PLUGIN_BUF_LEN;
+
+/* Iteration cache */
+typedef struct {
+    struct ifaddrs *ifaddr;
+    const char* wireless_first;
+    const char* ethernet_first;
+} it_cache_t;
+
+extern it_cache_t it_cache;
 
 #endif

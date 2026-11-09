@@ -8,6 +8,7 @@
 #include "i3status.h"
 
 #define STRING_SIZE 128
+#define BATTERY_PATH_REFRESH_INTERVAL 60
 
 #include <glob.h>
 #include <sys/types.h>
@@ -93,19 +94,18 @@ static void add_battery_info(struct battery_info *acc, const struct battery_info
     acc->present_rate = abs(present_rate);
 }
 
-static bool slurp_battery_info(battery_info_ctx_t *ctx, struct battery_info *batt_info, output_ctx_t *out_ctx, int number, const char *path, const char *format_down) {
-    char *outwalk = out_ctx->buf;
+static bool slurp_battery_file(battery_info_ctx_t *ctx, struct battery_info *batt_info, const char *batpath, const char *format_down, bool output_down) {
+    char *outwalk = out_ctx.buf;
 
     char buf[1024];
     const char *walk, *last;
     bool watt_as_unit = false;
     int voltage = -1;
-    char batpath[512];
-    sprintf(batpath, path, number);
     INSTANCE(batpath);
 
     if (!slurp(batpath, buf, sizeof(buf))) {
-        OUTPUT_FULL_TEXT(format_down);
+        if (output_down)
+            OUTPUT_FULL_TEXT(format_down);
         return false;
     }
 
@@ -123,43 +123,47 @@ static bool slurp_battery_info(battery_info_ctx_t *ctx, struct battery_info *bat
         if (*walk != '=')
             continue;
 
-        if (BEGINS_WITH(last, "POWER_SUPPLY_ENERGY_NOW=")) {
+        if (strncmp(last, "POWER_SUPPLY_", sizeof("POWER_SUPPLY_") - 1) != 0)
+            continue;
+        const char *key = last + sizeof("POWER_SUPPLY_") - 1;
+
+        if (BEGINS_WITH(key, "ENERGY_NOW=")) {
             watt_as_unit = true;
             batt_info->remaining = atoi(walk + 1);
             batt_info->percentage_remaining = -1;
-        } else if (BEGINS_WITH(last, "POWER_SUPPLY_CHARGE_NOW=")) {
+        } else if (BEGINS_WITH(key, "CHARGE_NOW=")) {
             watt_as_unit = false;
             batt_info->remaining = atoi(walk + 1);
             batt_info->percentage_remaining = -1;
-        } else if (BEGINS_WITH(last, "POWER_SUPPLY_CAPACITY=") && batt_info->remaining == -1) {
+        } else if (BEGINS_WITH(key, "CAPACITY=") && batt_info->remaining == -1) {
             batt_info->percentage_remaining = atoi(walk + 1);
-        } else if (BEGINS_WITH(last, "POWER_SUPPLY_CURRENT_NOW="))
+        } else if (BEGINS_WITH(key, "CURRENT_NOW="))
             batt_info->present_rate = abs(atoi(walk + 1));
-        else if (BEGINS_WITH(last, "POWER_SUPPLY_VOLTAGE_NOW="))
+        else if (BEGINS_WITH(key, "VOLTAGE_NOW="))
             voltage = abs(atoi(walk + 1));
-        else if (BEGINS_WITH(last, "POWER_SUPPLY_TIME_TO_EMPTY_NOW="))
+        else if (BEGINS_WITH(key, "TIME_TO_EMPTY_NOW="))
             batt_info->seconds_remaining = abs(atoi(walk + 1)) * 60;
         /* on some systems POWER_SUPPLY_POWER_NOW does not exist, but actually
          * it is the same as POWER_SUPPLY_CURRENT_NOW but with μWh as
          * unit instead of μAh. We will calculate it as we need it
          * later. */
-        else if (BEGINS_WITH(last, "POWER_SUPPLY_POWER_NOW="))
+        else if (BEGINS_WITH(key, "POWER_NOW="))
             batt_info->present_rate = abs(atoi(walk + 1));
-        else if (BEGINS_WITH(last, "POWER_SUPPLY_STATUS=Charging"))
+        else if (BEGINS_WITH(key, "STATUS=Charging"))
             batt_info->status = CS_CHARGING;
-        else if (BEGINS_WITH(last, "POWER_SUPPLY_STATUS=Full"))
+        else if (BEGINS_WITH(key, "STATUS=Full"))
             batt_info->status = CS_FULL;
-        else if (BEGINS_WITH(last, "POWER_SUPPLY_STATUS=Discharging"))
+        else if (BEGINS_WITH(key, "STATUS=Discharging"))
             batt_info->status = CS_DISCHARGING;
-        else if (BEGINS_WITH(last, "POWER_SUPPLY_STATUS=Not charging"))
+        else if (BEGINS_WITH(key, "STATUS=Not charging"))
             batt_info->status = CS_IDLE;
-        else if (BEGINS_WITH(last, "POWER_SUPPLY_STATUS="))
+        else if (BEGINS_WITH(key, "STATUS="))
             batt_info->status = CS_UNKNOWN;
-        else if (BEGINS_WITH(last, "POWER_SUPPLY_CHARGE_FULL_DESIGN=") ||
-                 BEGINS_WITH(last, "POWER_SUPPLY_ENERGY_FULL_DESIGN="))
+        else if (BEGINS_WITH(key, "CHARGE_FULL_DESIGN=") ||
+                 BEGINS_WITH(key, "ENERGY_FULL_DESIGN="))
             batt_info->full_design = atoi(walk + 1);
-        else if (BEGINS_WITH(last, "POWER_SUPPLY_ENERGY_FULL=") ||
-                 BEGINS_WITH(last, "POWER_SUPPLY_CHARGE_FULL="))
+        else if (BEGINS_WITH(key, "ENERGY_FULL=") ||
+                 BEGINS_WITH(key, "CHARGE_FULL="))
             batt_info->full_last = atoi(walk + 1);
     }
 
@@ -185,30 +189,86 @@ static bool slurp_battery_info(battery_info_ctx_t *ctx, struct battery_info *bat
     return true;
 }
 
-/*
- * Populate batt_info with aggregate information about all batteries.
- * Returns false on error, and an error message will have been written.
- */
-static bool slurp_all_batteries(battery_info_ctx_t *ctx, struct battery_info *batt_info, output_ctx_t *out_ctx, const char *path, const char *format_down) {
-    char *outwalk = out_ctx->buf;
-    bool is_found = false;
+static bool slurp_battery_info(battery_info_ctx_t *ctx, struct battery_info *batt_info, int number, const char *path, const char *format_down) {
+    char batpath[512];
+    snprintf(batpath, sizeof(batpath), path, number);
+    return slurp_battery_file(ctx, batt_info, batpath, format_down, true);
+}
 
-    char *placeholder;
-    char *globpath = sstrdup(path);
-    if ((placeholder = strstr(path, "%d")) != NULL) {
-        char *globplaceholder = globpath + (placeholder - path);
-        *globplaceholder = '*';
-        strcpy(globplaceholder + 1, placeholder + 2);
-    }
+static void clear_battery_path_cache(battery_info_ctx_t *ctx) {
+    for (size_t i = 0; i < ctx->battery_path_count; i++)
+        free(ctx->battery_paths[i]);
+    free(ctx->battery_paths);
+    ctx->battery_paths = NULL;
+    ctx->battery_path_count = 0;
+}
 
-    if (!strcmp(globpath, path)) {
+static bool refresh_battery_path_cache(battery_info_ctx_t *ctx, const char *path) {
+    char *outwalk = out_ctx.buf;
+    const char *placeholder = strstr(path, "%d");
+    if (placeholder == NULL) {
         OUTPUT_FULL_TEXT("no '%d' in battery path");
         return false;
     }
 
+    char *globpath = sstrdup(path);
+    char *globplaceholder = globpath + (placeholder - path);
+    *globplaceholder = '*';
+    strcpy(globplaceholder + 1, placeholder + 2);
+
     glob_t globbuf;
-    if (glob(globpath, 0, NULL, &globbuf) == 0) {
-        for (size_t i = 0; i < globbuf.gl_pathc; i++) {
+    int result = glob(globpath, 0, NULL, &globbuf);
+    free(globpath);
+
+    clear_battery_path_cache(ctx);
+    ctx->battery_paths_refreshed = time(NULL);
+
+    if (result != 0)
+        return false;
+
+    ctx->battery_paths = scalloc(globbuf.gl_pathc * sizeof(*ctx->battery_paths));
+    for (size_t i = 0; i < globbuf.gl_pathc; i++)
+        ctx->battery_paths[i] = sstrdup(globbuf.gl_pathv[i]);
+    ctx->battery_path_count = globbuf.gl_pathc;
+    globfree(&globbuf);
+
+    return ctx->battery_path_count > 0;
+}
+
+/*
+ * Populate batt_info with aggregate information about all batteries.
+ * Returns false on error, and an error message will have been written.
+ */
+static bool slurp_all_batteries(battery_info_ctx_t *ctx, struct battery_info *batt_info, const char *path, const char *format_down) {
+    char *outwalk = out_ctx.buf;
+    if (strstr(path, "%d") == NULL)
+        return refresh_battery_path_cache(ctx, path);
+
+    time_t now = time(NULL);
+    bool cache_expired = ctx->battery_paths == NULL ||
+        now < ctx->battery_paths_refreshed ||
+        now - ctx->battery_paths_refreshed >= BATTERY_PATH_REFRESH_INTERVAL;
+
+    for (int attempt = 0; attempt < 2; attempt++) {
+        if ((attempt == 0 && cache_expired) || ctx->battery_path_count == 0)
+            refresh_battery_path_cache(ctx, path);
+
+        if (ctx->battery_path_count == 0) {
+            OUTPUT_FULL_TEXT(format_down);
+            return false;
+        }
+
+        *batt_info = (struct battery_info){
+            .full_design = -1,
+            .full_last = -1,
+            .remaining = -1,
+            .present_rate = -1,
+            .seconds_remaining = -1,
+            .percentage_remaining = -1,
+            .status = CS_UNKNOWN,
+        };
+        bool is_found = false;
+        for (size_t i = 0; i < ctx->battery_path_count; i++) {
             /* Probe to see if there is such a battery. */
             struct battery_info batt_buf = {
                 .full_design = 0,
@@ -217,31 +277,34 @@ static bool slurp_all_batteries(battery_info_ctx_t *ctx, struct battery_info *ba
                 .present_rate = 0,
                 .status = CS_UNKNOWN,
             };
-            if (!slurp_battery_info(ctx, &batt_buf, out_ctx, i, globbuf.gl_pathv[i], format_down)) {
-                globfree(&globbuf);
-                free(globpath);
-                return false;
+            if (!slurp_battery_file(ctx, &batt_buf, ctx->battery_paths[i], format_down, false)) {
+                clear_battery_path_cache(ctx);
+                break;
             }
 
             is_found = true;
             add_battery_info(batt_info, &batt_buf);
         }
-        globfree(&globbuf);
-    }
-    free(globpath);
 
-    if (!is_found) {
+        if (is_found && ctx->battery_path_count > 0) {
+            batt_info->present_rate = abs(batt_info->present_rate);
+            return true;
+        }
+
+        if (attempt == 0)
+            refresh_battery_path_cache(ctx, path);
+    }
+
+    if (!ctx->battery_path_count) {
         OUTPUT_FULL_TEXT(format_down);
         return false;
     }
 
-    batt_info->present_rate = abs(batt_info->present_rate);
-
-    return true;
+    return false;
 }
 
-void print_battery_info(battery_info_ctx_t *ctx, output_ctx_t *out_ctx) {
-    char *outwalk = out_ctx->buf;
+void print_battery_info(battery_info_ctx_t *ctx) {
+    char *outwalk = out_ctx.buf;
     struct battery_info batt_info = {
         .full_design = -1,
         .full_last = -1,
@@ -253,10 +316,10 @@ void print_battery_info(battery_info_ctx_t *ctx, output_ctx_t *out_ctx) {
     };
 
     if (ctx->number < 0) {
-        if (!slurp_all_batteries(ctx, &batt_info, out_ctx, ctx->path, ctx->format_down))
+        if (!slurp_all_batteries(ctx, &batt_info, ctx->path, ctx->format_down))
             return;
     } else {
-        if (!slurp_battery_info(ctx, &batt_info, out_ctx, ctx->number, ctx->path, ctx->format_down))
+        if (!slurp_battery_info(ctx, &batt_info, ctx->number, ctx->path, ctx->format_down))
             return;
     }
 
@@ -374,5 +437,5 @@ void print_battery_info(battery_info_ctx_t *ctx, output_ctx_t *out_ctx) {
     free(formatted);
     free(untrimmed);
 
-    OUTPUT_FULL_TEXT(out_ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx.buf);
 }

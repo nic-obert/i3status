@@ -11,8 +11,8 @@
 
 #define STRING_SIZE 10
 
-void print_load(load_ctx_t *ctx, output_ctx_t *out_ctx) {
-    char *outwalk = out_ctx->buf;
+void print_load(load_ctx_t *ctx) {
+    char *outwalk = out_ctx.buf;
     /* Get load */
 
     double loadavg[3];
@@ -46,7 +46,7 @@ void print_load(load_ctx_t *ctx, output_ctx_t *out_ctx) {
     free(formatted);
 
     *outwalk = '\0';
-    OUTPUT_FULL_TEXT(out_ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx.buf);
 
     return;
 error:

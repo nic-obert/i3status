@@ -26,9 +26,11 @@
 #define PERCENT_VALUE(value, total) ((int)(value * 100 / (float)total + 0.5f))
 
 typedef struct {
-    int flags;
+    long int bitrate;
+    double frequency;
     char essid[IW_ESSID_MAX_SIZE + 1];
     uint8_t bssid[ETH_ALEN];
+    int flags;
     int quality;
     int quality_max;
     int quality_average;
@@ -36,9 +38,7 @@ typedef struct {
     int signal_level_max;
     int noise_level;
     int noise_level_max;
-    long int bitrate;
-    double frequency;
-} wireless_info_t; // TODO: review alignment and packing
+} wireless_info_t;
 
 typedef struct {
     struct nl_sock *socket;
@@ -348,23 +348,30 @@ error2:
  * | 127.0.0.1    | no IP        | IPv4      | ok                |
  * | 127.0.0.1    | ::1/128      | IPv4      | ok                |
  */
-void print_wireless_info(wireless_info_ctx_t *ctx, output_ctx_t *out_ctx, const struct ifaddrs *ifaddr) {
+void print_wireless_info(wireless_info_ctx_t *ctx) {
 
-    char *outwalk = out_ctx->buf;
+    char *outwalk = out_ctx.buf;
+    const char *interface;
+
+    if (ctx->use_first) {
+        interface = it_cache.wireless_first;
+    } else {
+        interface = ctx->interface;
+    }
     
-    if (ctx->interface == NULL) {
+    if (interface == NULL) {
         START_COLOR(bad);
-        outwalk += sprintf(out_ctx->buf, "%s", ctx->format_down);
-        OUTPUT_FULL_TEXT(out_ctx->buf);
+        outwalk += sprintf(out_ctx.buf, "%s", ctx->format_down);
+        OUTPUT_FULL_TEXT(out_ctx.buf);
         return;
     }
 
     const char *walk;
     wireless_info_t info;
 
-    INSTANCE(ctx->interface);
+    INSTANCE(interface);
 
-    ip_addr_t addresses = get_ip_addr_ipv4_ipv6(ctx->interface, ifaddr);
+    ip_addr_t addresses = get_ip_addr_ipv4_ipv6(interface);
     char *ipv4_address = addresses.ipv4_address;
     char *ipv6_address = addresses.ipv6_address;
 
@@ -387,7 +394,7 @@ void print_wireless_info(wireless_info_ctx_t *ctx, output_ctx_t *out_ctx, const 
 
             free(ipv4_address);
             free(ipv6_address);
-            OUTPUT_FULL_TEXT(out_ctx->buf);
+            OUTPUT_FULL_TEXT(out_ctx.buf);
             return;
         } else {
             prefer_ipv4 = false;
@@ -397,7 +404,7 @@ void print_wireless_info(wireless_info_ctx_t *ctx, output_ctx_t *out_ctx, const 
     }
 
     const char *ip_address = (prefer_ipv4) ? ipv4_address : ipv6_address;
-    if (!get_wireless_info(ctx->interface, &info)) {
+    if (!get_wireless_info(interface, &info)) {
         walk = ctx->format_down;
         START_COLOR(bad);
     } else {
@@ -480,5 +487,5 @@ void print_wireless_info(wireless_info_ctx_t *ctx, output_ctx_t *out_ctx, const 
 
     free(ipv4_address);
     free(ipv6_address);
-    OUTPUT_FULL_TEXT(out_ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx.buf);
 }

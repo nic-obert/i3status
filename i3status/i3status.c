@@ -39,6 +39,14 @@ static bool run_once = false;
 
 general_opts_t *general_cfg;
 
+output_ctx_t out_ctx;
+
+it_cache_t it_cache = {
+    .ethernet_first = NULL,
+    .wireless_first = NULL,
+    .ifaddr = NULL,
+};
+
 pthread_t main_thread;
 
 const size_t PLUGIN_BUF_LEN = 512;
@@ -209,25 +217,27 @@ int main(int argc, char *argv[]) {
     */
     char buffer[PLUGIN_BUF_LEN];
 
-    output_ctx_t out_ctx = {
-        .buf = buffer,
-        .json_gen = json_gen
-    };
+    // Initialize output context
+    out_ctx.buf = buffer;
+    out_ctx.json_gen = json_gen;
 
-    // Check if we will query network interfaces that can share state within the same iteration
-    bool share_ifaddrs = false;
+    // Cache the network interface list within the same iteration
+    bool compute_ifaddr = false;
+    bool compute_wireless_first = false;
+    bool compute_ethernet_first = false;
     for (int j = 0; j < cfg.item_count; j++) {
         status_item_t *item = &cfg.items[j];
         switch (item->type) {
             case ITEM_WIRELESS:
+                compute_ifaddr = true;
+                compute_wireless_first |= item->ctx.wireless.use_first;
+                break;
             case ITEM_ETHERNET:
-                share_ifaddrs = true;
+                compute_ifaddr = true;
+                compute_ethernet_first |= item->ctx.ethernet.use_first;
                 break;
         }
     }
-
-    // Shared state
-    struct ifaddrs *shared_ifaddrs = NULL;
 
     while (1) {
         if (exit_upon_signal) {
@@ -240,77 +250,77 @@ int main(int argc, char *argv[]) {
 
         yajl_gen_array_open(json_gen);
 
-        if (share_ifaddrs) {
-            if (shared_ifaddrs) freeifaddrs(shared_ifaddrs);
-            if (getifaddrs(&shared_ifaddrs) != 0) shared_ifaddrs = NULL;
+        if (compute_ifaddr) {
+            if (it_cache.ifaddr) freeifaddrs(it_cache.ifaddr);
+            if (getifaddrs(&it_cache.ifaddr) != 0) it_cache.ifaddr = NULL;
+        }
+        if (compute_ethernet_first || compute_wireless_first) {
+            // No need to cleanup this cache after the iteration because the function already does it
+            cache_first_network_interfaces(compute_ethernet_first, compute_wireless_first);
         }
 
         for (int j = 0; j < cfg.item_count; j++) {
             status_item_t *item = &cfg.items[j];
 
             switch (item->type) {
-            case ITEM_IPV6: // TODO: what is this? How is it different from print_wireless_info? Cant' we just introduce an option to prefer ipv6 over ipv4?
+            case ITEM_IPV6: // TODO: what is this? How is it different from print_wireless_info? Can't we just introduce an option to prefer ipv6 over ipv4?
                 SEC_OPEN_MAP("ipv6");
-                print_ipv6_info(&item->ctx.ipv6, &out_ctx);
+                print_ipv6_info(&item->ctx.ipv6);
                 SEC_CLOSE_MAP;
                 break;
 
             case ITEM_WIRELESS:
-                if (item->ctx.wireless.use_first)
-                    item->ctx.wireless.interface = first_net_interface(NET_TYPE_WIRELESS, shared_ifaddrs); // TODO: we should move the call to `first_net_interface` into the printing function
                 SEC_OPEN_MAP("wireless");
-                print_wireless_info(&item->ctx.wireless, &out_ctx, shared_ifaddrs);
+                print_wireless_info(&item->ctx.wireless);
                 SEC_CLOSE_MAP;
                 break;
 
             case ITEM_ETHERNET:
-                if (item->ctx.ethernet.use_first)
-                    item->ctx.ethernet.interface = first_net_interface(NET_TYPE_ETHERNET, shared_ifaddrs);
                 SEC_OPEN_MAP("ethernet");
-                print_eth_info(&item->ctx.ethernet, &out_ctx, shared_ifaddrs);
+                print_eth_info(&item->ctx.ethernet);
                 SEC_CLOSE_MAP;
                 break;
 
             case ITEM_BATTERY:
                 SEC_OPEN_MAP("battery");
-                print_battery_info(&item->ctx.battery, &out_ctx);
+                print_battery_info(&item->ctx.battery);
                 SEC_CLOSE_MAP;
                 break;
 
             case ITEM_LOAD:
                 SEC_OPEN_MAP("load");
-                print_load(&item->ctx.load, &out_ctx);
+                print_load(&item->ctx.load);
                 SEC_CLOSE_MAP;
                 break;
 
             case ITEM_MEMORY:
                 SEC_OPEN_MAP("memory");
-                print_memory(&item->ctx.memory, &out_ctx);
+                print_memory(&item->ctx.memory);
                 SEC_CLOSE_MAP;
                 break;
 
             case ITEM_TZTIME:
                 SEC_OPEN_MAP("tztime");
                 item->ctx.tztime.t = tv.tv_sec;
-                print_time(&item->ctx.tztime, &out_ctx);
+                print_time(&item->ctx.tztime);
                 SEC_CLOSE_MAP;
                 break;
 
             case ITEM_VOLUME:
                 SEC_OPEN_MAP("volume");
-                print_volume(&item->ctx.volume, &out_ctx);
+                print_volume(&item->ctx.volume);
                 SEC_CLOSE_MAP;
                 break;
 
             case ITEM_CPU_TEMPERATURE:
                 SEC_OPEN_MAP("cpu_temperature");
-                print_cpu_temperature_info(&item->ctx.cpu_temperature, &out_ctx);
+                print_cpu_temperature_info(&item->ctx.cpu_temperature);
                 SEC_CLOSE_MAP;
                 break;
 
             case ITEM_CPU_USAGE:
                 SEC_OPEN_MAP("cpu_usage");
-                print_cpu_usage(&item->ctx.cpu_usage, &out_ctx);
+                print_cpu_usage(&item->ctx.cpu_usage);
                 SEC_CLOSE_MAP;
                 break;
             }
@@ -338,9 +348,9 @@ int main(int argc, char *argv[]) {
 
     // Free long-standing resources and caches
     yajl_gen_free(json_gen);
-    if (shared_ifaddrs) {
-        freeifaddrs(shared_ifaddrs);
-        shared_ifaddrs = NULL;
+    if (it_cache.ifaddr) {
+        freeifaddrs(it_cache.ifaddr);
+        it_cache.ifaddr = NULL;
     }
     free_wireless_info_cache();
 

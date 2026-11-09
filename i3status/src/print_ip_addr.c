@@ -36,17 +36,17 @@ static bool interface_names_match(const char *ifa_name, const char *interface, s
  * NULL if the interface does not exist, or "no IP" if the interface is up
  * and running but has no address of that family.
  */
-ip_addr_t get_ip_addr_ipv4_ipv6(const char *interface, const struct ifaddrs *ifaddr) {
+ip_addr_t get_ip_addr_ipv4_ipv6(const char *interface) {
     ip_addr_t result = {NULL, NULL};
-    struct ifaddrs *addrp;
+    const struct ifaddrs *addrp;
     bool found = false;
     bool down = false;
     size_t interface_len = strlen(interface);
 
-    if (ifaddr == NULL)
+    if (it_cache.ifaddr == NULL)
         return result;
 
-    for (addrp = ifaddr; addrp != NULL; addrp = addrp->ifa_next) {
+    for (addrp = it_cache.ifaddr; addrp != NULL; addrp = addrp->ifa_next) {
         if (!interface_names_match(addrp->ifa_name, interface, interface_len)) {
             /* The interface does not have the right name, skip it. */
             continue;

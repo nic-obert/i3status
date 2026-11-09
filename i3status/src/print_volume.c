@@ -45,8 +45,8 @@ static char *apply_volume_format(const char *fmt, int ivolume, const char *devic
     return format_placeholders(fmt, &placeholders[0], num);
 }
 
-void print_volume(volume_ctx_t *ctx, output_ctx_t *out_ctx) {
-    char *outwalk = out_ctx->buf;
+void print_volume(volume_ctx_t *ctx) {
+    char *outwalk = out_ctx.buf;
     int pbval = 1;
 
     /* Printing volume works with ALSA and PulseAudio at the moment */
@@ -219,5 +219,5 @@ void print_volume(volume_ctx_t *ctx, output_ctx_t *out_ctx) {
     goto out;
 
 out:
-    OUTPUT_FULL_TEXT(out_ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx.buf);
 }

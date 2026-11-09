@@ -28,10 +28,10 @@ static struct cpu_usage *curr_cpus = NULL;
  * percentage.
  *
  */
-void print_cpu_usage(cpu_usage_ctx_t *ctx, output_ctx_t *out_ctx) {
+void print_cpu_usage(cpu_usage_ctx_t *ctx) {
     const char *selected_format = ctx->format;
     const char *walk;
-    char *outwalk = out_ctx->buf;
+    char *outwalk = out_ctx.buf;
     struct cpu_usage curr_all = {0, 0, 0, 0, 0};
     int diff_idle, diff_total;
     int diff_usage;
@@ -92,7 +92,7 @@ void print_cpu_usage(cpu_usage_ctx_t *ctx, output_ctx_t *out_ctx) {
 
     diff_idle = curr_all.idle - prev_all.idle;
     diff_total = curr_all.total - prev_all.total;
-    diff_usage = (diff_total ? (1000 * (diff_total - diff_idle) / diff_total + 5) / 10 : 0);
+    diff_usage = (diff_total ? (1000LL * (diff_total - diff_idle) / diff_total + 5) / 10 : 0);
     prev_all = curr_all;
 
     if (diff_usage >= ctx->max_threshold) {
@@ -124,7 +124,7 @@ void print_cpu_usage(cpu_usage_ctx_t *ctx, output_ctx_t *out_ctx) {
             } else {
                 int cpu_diff_idle = curr_cpus[number].idle - prev_cpus[number].idle;
                 int cpu_diff_total = curr_cpus[number].total - prev_cpus[number].total;
-                int cpu_diff_usage = (cpu_diff_total ? (1000 * (cpu_diff_total - cpu_diff_idle) / cpu_diff_total + 5) / 10 : 0);
+                int cpu_diff_usage = (cpu_diff_total ? (1000LL * (cpu_diff_total - cpu_diff_idle) / cpu_diff_total + 5) / 10 : 0);
                 outwalk += sprintf(outwalk, "%02d%s", cpu_diff_usage, "%");
             }
             walk += length;
@@ -138,7 +138,7 @@ void print_cpu_usage(cpu_usage_ctx_t *ctx, output_ctx_t *out_ctx) {
     prev_cpus = curr_cpus;
     curr_cpus = temp_cpus;
 
-    OUTPUT_FULL_TEXT(out_ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx.buf);
     return;
 error:
     OUTPUT_FULL_TEXT("cant read cpu usage");

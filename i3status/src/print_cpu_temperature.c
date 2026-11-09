@@ -13,7 +13,7 @@
 typedef struct temperature_s {
     double raw_value;
     char formatted_value[20];
-} temperature_t; // TODO: check alignment and packing
+} temperature_t;
 
 #define ERROR_CODE 1
 
@@ -40,8 +40,8 @@ static int read_temperature(char *thermal_zone, temperature_t *temperature) {
  * the user provided path) and returns the temperature in degree celsius.
  *
  */
-void print_cpu_temperature_info(cpu_temperature_ctx_t *ctx, output_ctx_t *out_ctx) {
-    char *outwalk = out_ctx->buf;
+void print_cpu_temperature_info(cpu_temperature_ctx_t *ctx) {
+    char *outwalk = out_ctx.buf;
 #ifdef THERMAL_ZONE
     const char *selected_format = ctx->format;
     char *thermal_zone;
@@ -87,7 +87,7 @@ void print_cpu_temperature_info(cpu_temperature_ctx_t *ctx, output_ctx_t *out_ct
     free(formatted);
     free(thermal_zone);
 
-    OUTPUT_FULL_TEXT(out_ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx.buf);
     return;
 error:
     free(thermal_zone);

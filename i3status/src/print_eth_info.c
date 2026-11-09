@@ -60,24 +60,30 @@ static int print_eth_speed(char *outwalk, const char *interface) {
  * | 127.0.0.1    | no IP        | IPv4      | ok                |
  * | 127.0.0.1    | ::1/128      | IPv4      | ok                |
  */
-void print_eth_info(eth_info_ctx_t *ctx, output_ctx_t *out_ctx, const struct ifaddrs *ifaddr) {
+void print_eth_info(eth_info_ctx_t *ctx) {
 
-    char *outwalk = out_ctx->buf;
+    char *outwalk = out_ctx.buf;
+    const char *interface;
 
-    if (ctx->interface == NULL) {
+    if (ctx->use_first) {
+        interface = it_cache.ethernet_first;
+    } else {
+        interface = ctx->interface;
+    }
+
+    if (interface == NULL) {
         START_COLOR(bad);
-        outwalk += sprintf(out_ctx->buf, "%s", ctx->format_down);
-        OUTPUT_FULL_TEXT(out_ctx->buf);
+        outwalk += sprintf(out_ctx.buf, "%s", ctx->format_down);
+        OUTPUT_FULL_TEXT(out_ctx.buf);
         return;
     }
 
-    const char *format = ctx->format_down;  // default format
-
+    const char *format = ctx->format_down;
     size_t num = 0;
 
-    INSTANCE(ctx->interface);
+    INSTANCE(interface);
 
-    ip_addr_t addresses = get_ip_addr_ipv4_ipv6(ctx->interface, ifaddr);
+    ip_addr_t addresses = get_ip_addr_ipv4_ipv6(interface);
     char *ipv4_address = addresses.ipv4_address;
     char *ipv6_address = addresses.ipv6_address;
 
@@ -104,21 +110,20 @@ void print_eth_info(eth_info_ctx_t *ctx, output_ctx_t *out_ctx, const struct ifa
         prefer_ipv4 = false;
     }
 
-    format = ctx->format_up;
-
     const char *ip_address = (prefer_ipv4) ? ipv4_address : ipv6_address;
     if (BEGINS_WITH(ip_address, "no IP")) {
         START_COLOR(degraded);
     } else {
         START_COLOR(good);
     }
+    format = ctx->format_up;
 
     char string_ip[STRING_SIZE];
     char string_speed[STRING_SIZE];
     char string_interface[STRING_SIZE];
     snprintf(string_ip, STRING_SIZE, "%s", ip_address);
-    print_eth_speed(string_speed, ctx->interface);
-    snprintf(string_interface, STRING_SIZE, "%s", ctx->interface);
+    print_eth_speed(string_speed, interface);
+    snprintf(string_interface, STRING_SIZE, "%s", interface);
     placeholder_t placeholders[] = {
         {.name = "%ip", .value = string_ip},
         {.name = "%speed", .value = string_speed},
@@ -131,6 +136,6 @@ out : {
     free(formatted);
     free(ipv4_address);
     free(ipv6_address);
-    OUTPUT_FULL_TEXT(out_ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx.buf);
 }
 }

@@ -46,7 +46,8 @@ bool slurp(const char *filename, char *destination, int size) {
  */
 char *resolve_tilde(const char *path) {
     static glob_t globbuf;
-    char *head, *tail, *result = NULL;
+    const char *tail;
+    char *head, *result = NULL;
 
     tail = strchr(path, '/');
     head = strndup(path, tail ? (size_t)(tail - path) : strlen(path));

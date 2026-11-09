@@ -79,8 +79,8 @@ static unsigned long memory_absolute(const char *mem_amount, const unsigned long
     return amount;
 }
 
-void print_memory(memory_ctx_t *ctx, output_ctx_t *out_ctx) {
-    char *outwalk = out_ctx->buf;
+void print_memory(memory_ctx_t *ctx) {
+    char *outwalk = out_ctx.buf;
 
     const char *selected_format = ctx->format;
     const char *output_color = NULL;
@@ -197,7 +197,7 @@ void print_memory(memory_ctx_t *ctx, output_ctx_t *out_ctx) {
     OUTPUT_FORMATTED;
     free(formatted);
 
-    OUTPUT_FULL_TEXT(out_ctx->buf);
+    OUTPUT_FULL_TEXT(out_ctx.buf);
 
     return;
 error:

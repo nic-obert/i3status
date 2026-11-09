@@ -39,18 +39,18 @@ static bool sysfs_devtype(char *dest, size_t n, const char *ifnam) {
 
 static bool is_virtual(const char *ifname) {
     char path[1024];
-    char *target = NULL;
-    bool is_virtual = false;
+    char target[1024];
+    ssize_t length; 
 
     snprintf(path, sizeof(path), "/sys/class/net/%s", ifname);
-    if ((target = realpath(path, NULL))) {
-        if (BEGINS_WITH(target, "/sys/devices/virtual/")) {
-            is_virtual = true;
-        }
-        free(target);
-    }
+    
+    length = readlink(path, target, sizeof(target)-1);
+    if (length < 0)
+        return false;
 
-    return is_virtual;
+    target[length] = '\0';
+
+    return strstr(target, "/devices/virtual/") != NULL;
 }
 
 static net_type_t iface_type(const char *ifname) {
@@ -74,30 +74,51 @@ static net_type_t iface_type(const char *ifname) {
 
 
 /*
-    Return the first network interface of the requested type among the given list of interfaces.    
+    Cache the first network interface of each requested type.
+    This function shall be called only after initializing the ifaddr cache.
+    Ownership: the strings cached by this functions are owned by the ifaddr cache.
+    This function cleans up the previously cached values.
 */
-const char *first_net_interface(const net_type_t type, const struct ifaddrs *ifaddr) {
-    struct ifaddrs *addrp;
+void cache_first_network_interfaces(bool requested_ethernet, bool requested_wireless) {
+    const struct ifaddrs *addrp;
     net_type_t iftype;
 
-    for (addrp = ifaddr; addrp != NULL; addrp = addrp->ifa_next) {
-        if (strncasecmp(LOOPBACK_DEV, addrp->ifa_name, strlen(LOOPBACK_DEV)) == 0)
+    // Reinitialize cache
+    it_cache.wireless_first = NULL;
+    it_cache.ethernet_first = NULL;
+
+    for (addrp = it_cache.ifaddr; addrp != NULL; addrp = addrp->ifa_next) {
+        
+        // Skip loopback devices
+        if (strcmp(addrp->ifa_name, LOOPBACK_DEV) == 0)
             continue;
+
+        // Skip if interface has no address
         if (addrp->ifa_addr == NULL)
             continue;
+
         // Skip AF_PACKET addresses (MAC addresses), as they are present on any interface.
         if (addrp->ifa_addr->sa_family != AF_INET &&
             addrp->ifa_addr->sa_family != AF_INET6)
             continue;
-        // Skip this interface if it's not the requested type.
-        iftype = iface_type(addrp->ifa_name);
-        if (iftype != type)
-            continue;
+
+        // Skip virtual devices
         if (is_virtual(addrp->ifa_name))
             continue;
 
-        return addrp->ifa_name;
-    }
+        iftype = iface_type(addrp->ifa_name);
+        
+        if (iftype == NET_TYPE_ETHERNET && requested_ethernet && it_cache.ethernet_first == NULL) {
+            it_cache.ethernet_first = addrp->ifa_name; // TODO: consider whether we could cache the IP address of this interface
+            if (requested_wireless && it_cache.wireless_first != NULL)
+                return;
+        }
 
-    return NULL;
+        if (iftype == NET_TYPE_WIRELESS && requested_wireless && it_cache.wireless_first == NULL) {
+            it_cache.wireless_first = addrp->ifa_name;
+            if (requested_ethernet && it_cache.ethernet_first != NULL)
+                return;
+        }
+        
+    }
 }
