@@ -88,7 +88,6 @@ static bool set_module_type(status_item_t *item, const char *name) {
         const char *name;
         item_type_t type;
     } types[] = {
-        {"ipv6", ITEM_IPV6},
         {"wireless", ITEM_WIRELESS},
         {"ethernet", ITEM_ETHERNET},
         {"battery", ITEM_BATTERY},
@@ -112,10 +111,6 @@ static void init_item(status_item_t *item, const char *name) {
     memset(item, 0, sizeof(*item));
     set_module_type(item, name);
     switch (item->type) {
-    case ITEM_IPV6:
-        item->ctx.ipv6.format_up = sstrdup(CONFIG_DEFAULT_IPV6_FORMAT_UP);
-        item->ctx.ipv6.format_down = sstrdup(CONFIG_DEFAULT_IPV6_FORMAT_DOWN);
-        break;
     case ITEM_WIRELESS:
         item->ctx.wireless.format_up = sstrdup(CONFIG_DEFAULT_WIRELESS_FORMAT_UP);
         item->ctx.wireless.format_down = sstrdup(CONFIG_DEFAULT_WIRELESS_FORMAT_DOWN);
@@ -209,7 +204,6 @@ static bool set_general_string(parser_state_t *state, const char *key, const uns
 static bool set_item_string(status_item_t *item, const char *key, const unsigned char *value, size_t length) {
 #define STR(name, field) if (strcmp(key, name) == 0) return set_string(value, length, &field)
     switch (item->type) {
-    case ITEM_IPV6: STR("format_up", item->ctx.ipv6.format_up); STR("format_down", item->ctx.ipv6.format_down); break;
     case ITEM_WIRELESS:
         STR("interface", item->ctx.wireless.interface); STR("format_up", item->ctx.wireless.format_up); STR("format_down", item->ctx.wireless.format_down);
         STR("format_bitrate", item->ctx.wireless.format_bitrate); STR("format_noise", item->ctx.wireless.format_noise);

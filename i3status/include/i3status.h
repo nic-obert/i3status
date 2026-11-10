@@ -125,13 +125,6 @@ typedef enum {
 } net_type_t;
 void cache_first_network_interfaces(bool ethernet, bool wireless);
 
-typedef struct {
-    const char *format_up;
-    const char *format_down;
-} ipv6_info_ctx_t;
-
-void print_ipv6_info(ipv6_info_ctx_t *ctx);
-
 typedef enum : uint8_t {
     PERCENTAGE,
     TIME
@@ -147,14 +140,14 @@ typedef struct {
     const char *status_full;
     const char *status_idle;
     const char *format_percentage;
+    char **battery_paths;
+    time_t battery_paths_refreshed;
+    size_t battery_path_count;
     int number;
     bat_threshold_type_t threshold_type;
     uint8_t low_threshold;
     bool last_full_capacity;
     bool hide_seconds;
-    char **battery_paths;
-    size_t battery_path_count;
-    time_t battery_paths_refreshed;
 } battery_info_ctx_t;
 
 void print_battery_info(battery_info_ctx_t *ctx);
@@ -259,7 +252,6 @@ bool pulse_initialize(void);
 /* config */
 
 typedef enum {
-    ITEM_IPV6,
     ITEM_WIRELESS,
     ITEM_ETHERNET,
     ITEM_BATTERY,
@@ -274,7 +266,6 @@ typedef enum {
 typedef struct {
     item_type_t type;
     union {
-        ipv6_info_ctx_t ipv6;
         wireless_info_ctx_t wireless;
         eth_info_ctx_t ethernet;
         battery_info_ctx_t battery;

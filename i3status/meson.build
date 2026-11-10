@@ -144,7 +144,6 @@ i3status_srcs = [
   'src/print_cpu_usage.c',
   'src/print_eth_info.c',
   'src/print_ip_addr.c',
-  'src/print_ipv6_addr.c',
   'src/print_load.c',
   'src/print_mem.c',
   'src/print_time.c',

@@ -263,12 +263,6 @@ int main(int argc, char *argv[]) {
             status_item_t *item = &cfg.items[j];
 
             switch (item->type) {
-            case ITEM_IPV6: // TODO: what is this? How is it different from print_wireless_info? Can't we just introduce an option to prefer ipv6 over ipv4?
-                SEC_OPEN_MAP("ipv6");
-                print_ipv6_info(&item->ctx.ipv6);
-                SEC_CLOSE_MAP;
-                break;
-
             case ITEM_WIRELESS:
                 SEC_OPEN_MAP("wireless");
                 print_wireless_info(&item->ctx.wireless);
